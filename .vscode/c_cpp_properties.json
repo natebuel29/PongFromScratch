@@ -3,10 +3,11 @@
         {
             "name": "Win32",
             "includePath": [
-                "${default}"
+                "${default}",
+                "${workspaceFolder}/src/renderer"
             ],
             "defines": [
-                "_DEBUG",
+                "_DEBUG"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "compilerPath": "cl.exe",

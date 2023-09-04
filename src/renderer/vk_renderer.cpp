@@ -4,6 +4,7 @@
 #elif LINUX_BUILD
 #endif
 #include <iostream>
+#include <renderer\vk_init.cpp>
 
 #define VK_CHECK(result)                                      \
     if (result != VK_SUCCESS)                                 \
@@ -31,8 +32,16 @@ struct VkContext
     VkSurfaceKHR surface;
     VkPhysicalDevice gpu;
     VkDevice device;
+    VkQueue graphicsQueue;
     VkSwapchainKHR swapchain;
     VkDebugUtilsMessengerEXT debugMessenger;
+    VkCommandPool commandPool;
+    VkSurfaceFormatKHR surfaceFormat;
+    VkSemaphore submitSemaphore;
+    VkSemaphore aquireSemaphore;
+    uint32_t scImgCount;
+    // TODO: Suballocation from main memory
+    VkImage scImages[5];
     uint32_t graphicsIdx;
 };
 
@@ -152,17 +161,123 @@ bool vk_init(VkContext *vkcontext, void *window)
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.ppEnabledExtensionNames = extensions;
         deviceInfo.enabledExtensionCount = ArraySize(extensions);
+
         VK_CHECK(vkCreateDevice(vkcontext->gpu, &deviceInfo, 0, &vkcontext->device));
+
+        vkGetDeviceQueue(vkcontext->device, vkcontext->graphicsIdx, 0, &vkcontext->graphicsQueue);
     }
 
     // Swap Chain
     {
+        uint32_t formatCount = 0;
+        // TODO: Suballocation from main memory
+        VkSurfaceFormatKHR surfaceFormats[10];
+        VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vkcontext->gpu, vkcontext->surface, &formatCount, 0));
+        VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vkcontext->gpu, vkcontext->surface, &formatCount, surfaceFormats));
+
+        for (uint32_t i = 0; i < formatCount; i++)
+        {
+            VkSurfaceFormatKHR format = surfaceFormats[i];
+
+            if (format.format = VK_FORMAT_B8G8R8A8_SRGB)
+            {
+                vkcontext->surfaceFormat = format;
+                break;
+            }
+        }
+
+        VkSurfaceCapabilitiesKHR surfaceCaps = {};
+        VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkcontext->gpu, vkcontext->surface, &surfaceCaps));
+        uint32_t imgCount = 0;
+        imgCount = surfaceCaps.minImageCount + 1;
+        imgCount = imgCount > surfaceCaps.maxImageCount ? imgCount - 1 : imgCount;
+
         VkSwapchainCreateInfoKHR scInfo = {};
         scInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         scInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        scInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         scInfo.surface = vkcontext->surface;
+        scInfo.imageFormat = vkcontext->surfaceFormat.format;
+        scInfo.preTransform = surfaceCaps.currentTransform;
+        scInfo.imageExtent = surfaceCaps.currentExtent;
+        scInfo.minImageCount = imgCount;
+        scInfo.imageArrayLayers = 1;
         VK_CHECK(vkCreateSwapchainKHR(vkcontext->device, &scInfo, 0, &vkcontext->swapchain));
+
+        VK_CHECK(vkGetSwapchainImagesKHR(vkcontext->device, vkcontext->swapchain, &vkcontext->scImgCount, 0));
+        VK_CHECK(vkGetSwapchainImagesKHR(vkcontext->device, vkcontext->swapchain, &vkcontext->scImgCount, vkcontext->scImages));
     }
+
+    // Command Pool
+    {
+
+        VkCommandPoolCreateInfo poolInfo = {};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.queueFamilyIndex = vkcontext->graphicsIdx;
+        VK_CHECK(vkCreateCommandPool(vkcontext->device, &poolInfo, 0, &vkcontext->commandPool));
+    }
+
+    // Sync Objects
+    {
+        VkSemaphoreCreateInfo semaInfo = {};
+        semaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VK_CHECK(vkCreateSemaphore(vkcontext->device, &semaInfo, 0, &vkcontext->aquireSemaphore));
+        VK_CHECK(vkCreateSemaphore(vkcontext->device, &semaInfo, 0, &vkcontext->submitSemaphore));
+    }
+
+    return true;
+}
+
+bool vk_render(VkContext *vkcontext)
+{
+    uint32_t imgIdx;
+    VK_CHECK(vkAcquireNextImageKHR(vkcontext->device, vkcontext->swapchain, 0, vkcontext->aquireSemaphore, 0, &imgIdx));
+    VkCommandBuffer cmd;
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandBufferCount = 1;
+    allocInfo.commandPool = vkcontext->commandPool;
+    VK_CHECK(vkAllocateCommandBuffers(vkcontext->device, &allocInfo, &cmd));
+
+    VkCommandBufferBeginInfo beginInfo = cmd_begin_info();
+    VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+
+    // Rendering Commands
+    {
+        VkClearColorValue color = {1, 1, 0, 1};
+        VkImageSubresourceRange range = {};
+        range.layerCount = 1;
+        range.levelCount = 1;
+        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        vkCmdClearColorImage(cmd, vkcontext->scImages[imgIdx], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, &color, 1, &range);
+    }
+
+    VK_CHECK(vkEndCommandBuffer(cmd));
+
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd;
+    submitInfo.pSignalSemaphores = &vkcontext->submitSemaphore;
+    submitInfo.pWaitDstStageMask = &waitStage;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &vkcontext->aquireSemaphore;
+    VK_CHECK(vkQueueSubmit(vkcontext->graphicsQueue, 1, &submitInfo, 0));
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pSwapchains = &vkcontext->swapchain;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pImageIndices = &imgIdx;
+    presentInfo.pWaitSemaphores = &vkcontext->submitSemaphore;
+    presentInfo.waitSemaphoreCount = 1;
+    VK_CHECK(vkQueuePresentKHR(vkcontext->graphicsQueue, &presentInfo));
+
+    vkFreeCommandBuffers(vkcontext->device, vkcontext->commandPool, 1, &cmd);
 
     return true;
 }
