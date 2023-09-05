@@ -1,4 +1,5 @@
 #include <vulkan/vulkan.h>
+#include <platform.h>
 #ifdef WINDOWS_BUILD
 #include <vulkan/vulkan_win32.h>
 #elif LINUX_BUILD
@@ -28,6 +29,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
 
 struct VkContext
 {
+    VkExtent2D screenSize;
     VkInstance instance;
     VkSurfaceKHR surface;
     VkPhysicalDevice gpu;
@@ -35,6 +37,7 @@ struct VkContext
     VkQueue graphicsQueue;
     VkSwapchainKHR swapchain;
     VkDebugUtilsMessengerEXT debugMessenger;
+    VkRenderPass renderpass;
     VkCommandPool commandPool;
     VkSurfaceFormatKHR surfaceFormat;
     VkSemaphore submitSemaphore;
@@ -42,11 +45,15 @@ struct VkContext
     uint32_t scImgCount;
     // TODO: Suballocation from main memory
     VkImage scImages[5];
+    VkImageView scImageViews[5];
+    VkFramebuffer framebuffers[5];
     uint32_t graphicsIdx;
 };
 
 bool vk_init(VkContext *vkcontext, void *window)
 {
+    platform_get_window_size(&vkcontext->screenSize.width, &vkcontext->screenSize.height);
+
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Pong";
@@ -206,6 +213,70 @@ bool vk_init(VkContext *vkcontext, void *window)
 
         VK_CHECK(vkGetSwapchainImagesKHR(vkcontext->device, vkcontext->swapchain, &vkcontext->scImgCount, 0));
         VK_CHECK(vkGetSwapchainImagesKHR(vkcontext->device, vkcontext->swapchain, &vkcontext->scImgCount, vkcontext->scImages));
+
+        // Create the image views
+        {
+            VkImageViewCreateInfo viewInfo = {};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.format = vkcontext->surfaceFormat.format;
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            viewInfo.subresourceRange.levelCount = 1;
+            viewInfo.subresourceRange.layerCount = 1;
+
+            for (uint32_t i = 0; i < vkcontext->scImgCount; i++)
+            {
+                viewInfo.image = vkcontext->scImages[i];
+
+                VK_CHECK(vkCreateImageView(vkcontext->device, &viewInfo, 0, &vkcontext->scImageViews[i]));
+            }
+        }
+    }
+
+    // Render Pass
+    {
+        VkAttachmentDescription attachment = {};
+        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        attachment.format = vkcontext->surfaceFormat.format;
+
+        VkAttachmentReference colorAttachmentRef = {};
+        colorAttachmentRef.attachment = 0;
+        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpassDesc = {};
+        subpassDesc.colorAttachmentCount = 1;
+        subpassDesc.pColorAttachments = &colorAttachmentRef;
+
+        VkAttachmentDescription attachments[]{
+            attachment,
+        };
+        VkRenderPassCreateInfo rpInfo = {};
+        rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        rpInfo.pAttachments = attachments;
+        rpInfo.attachmentCount = ArraySize(attachments);
+        rpInfo.subpassCount = 1;
+        rpInfo.pSubpasses = &subpassDesc;
+        VK_CHECK(vkCreateRenderPass(vkcontext->device, &rpInfo, 0, &vkcontext->renderpass));
+    }
+
+    // Framebuffers
+    {
+        VkFramebufferCreateInfo fbInfo = {};
+        fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fbInfo.width = vkcontext->screenSize.width;
+        fbInfo.height = vkcontext->screenSize.height;
+        fbInfo.renderPass = vkcontext->renderpass;
+        fbInfo.layers = 1;
+        fbInfo.attachmentCount = 1;
+        for (uint32_t i = 0; i < vkcontext->scImgCount; i++)
+        {
+            fbInfo.pAttachments = &vkcontext->scImageViews[i];
+            vkCreateFramebuffer(vkcontext->device, &fbInfo, 0, &vkcontext->framebuffers[i]);
+        }
     }
 
     // Command Pool
@@ -243,15 +314,23 @@ bool vk_render(VkContext *vkcontext)
     VkCommandBufferBeginInfo beginInfo = cmd_begin_info();
     VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
 
+    VkClearValue clearValue = {};
+    clearValue.color = {1, 1, 0, 1};
+
+    VkRenderPassBeginInfo rpBeginInfo = {};
+    rpBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpBeginInfo.renderPass = vkcontext->renderpass;
+    rpBeginInfo.renderArea.extent = vkcontext->screenSize;
+    rpBeginInfo.framebuffer = vkcontext->framebuffers[imgIdx];
+    rpBeginInfo.pClearValues = &clearValue;
+    rpBeginInfo.clearValueCount = 1;
+    vkCmdBeginRenderPass(cmd, &rpBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
     // Rendering Commands
     {
-        VkClearColorValue color = {1, 1, 0, 1};
-        VkImageSubresourceRange range = {};
-        range.layerCount = 1;
-        range.levelCount = 1;
-        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        vkCmdClearColorImage(cmd, vkcontext->scImages[imgIdx], VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, &color, 1, &range);
     }
+
+    vkCmdEndRenderPass(cmd);
 
     VK_CHECK(vkEndCommandBuffer(cmd));
 
@@ -276,6 +355,8 @@ bool vk_render(VkContext *vkcontext)
     presentInfo.pWaitSemaphores = &vkcontext->submitSemaphore;
     presentInfo.waitSemaphoreCount = 1;
     VK_CHECK(vkQueuePresentKHR(vkcontext->graphicsQueue, &presentInfo));
+
+    VK_CHECK(vkDeviceWaitIdle(vkcontext->device));
 
     vkFreeCommandBuffers(vkcontext->device, vkcontext->commandPool, 1, &cmd);
 
