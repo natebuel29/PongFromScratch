@@ -519,7 +519,7 @@ bool vk_init(VkContext *vkcontext, void *window)
         vkCmdCopyBufferToImage(cmd, vkcontext->stagingBuffer.buffer, vkcontext->image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
-
+        // shoulld be 9/6 :D
         vkDeviceWaitIdle(vkcontext->device);
     }
 
