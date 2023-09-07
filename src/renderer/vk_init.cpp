@@ -2,19 +2,38 @@
 
 VkCommandBufferBeginInfo cmd_begin_info()
 {
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBufferBeginInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    return beginInfo;
+    return info;
 }
 
 VkCommandBufferAllocateInfo cmd_alloc_info(VkCommandPool pool)
 {
-    VkCommandBufferAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandBufferCount = 1;
-    allocInfo.commandPool = pool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    return allocInfo;
+    VkCommandBufferAllocateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.commandBufferCount = 1;
+    info.commandPool = pool;
+    info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    return info;
+}
+
+VkFenceCreateInfo fence_info(VkFenceCreateFlags flags = 0)
+{
+    VkFenceCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    info.flags = flags;
+    return info;
+}
+
+VkSubmitInfo submit_info(VkCommandBuffer *cmd, uint32_t cmdCount = 1)
+{
+    VkSubmitInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    info.commandBufferCount = cmdCount;
+    info.pCommandBuffers = cmd;
+
+    return info;
 }
