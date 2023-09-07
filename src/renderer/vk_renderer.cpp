@@ -1,11 +1,14 @@
 #include <vulkan/vulkan.h>
 #include <platform.h>
+#include <defines.h>
+#include <dds_structs.h>
 #ifdef WINDOWS_BUILD
 #include <vulkan/vulkan_win32.h>
 #elif LINUX_BUILD
 #endif
 #include <iostream>
 #include <renderer\vk_init.cpp>
+#include <renderer\vk_types.h>
 
 #define VK_CHECK(result)                                      \
     if (result != VK_SUCCESS)                                 \
@@ -33,6 +36,7 @@ struct VkContext
     VkInstance instance;
     VkSurfaceKHR surface;
     VkPhysicalDevice gpu;
+    VkCommandBuffer cmd;
     VkDevice device;
     VkQueue graphicsQueue;
     VkSwapchainKHR swapchain;
@@ -41,7 +45,9 @@ struct VkContext
     VkCommandPool commandPool;
     VkSurfaceFormatKHR surfaceFormat;
     VkSemaphore submitSemaphore;
+    VkFence imgAvailableFence;
     VkSemaphore aquireSemaphore;
+
     VkPipeline pipeline;
     VkPipelineLayout pipeLayout;
     uint32_t scImgCount;
@@ -49,6 +55,9 @@ struct VkContext
     VkImage scImages[5];
     VkImageView scImageViews[5];
     VkFramebuffer framebuffers[5];
+    // TODO will be inside array
+    Image image;
+    Buffer stagingBuffer;
     uint32_t graphicsIdx;
 };
 
@@ -291,23 +300,32 @@ bool vk_init(VkContext *vkcontext, void *window)
     // Pipeline
     {
         VkShaderModule vertexShader, fragmentShader;
-        uint32_t sizeInBytes;
-        char *code = platform_read_file("assets/shaders/shader.vert.spv", &sizeInBytes);
 
-        VkShaderModuleCreateInfo shaderInfo = {};
-        shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderInfo.pCode = (uint32_t *)code;
-        shaderInfo.codeSize = sizeInBytes;
-        VK_CHECK(vkCreateShaderModule(vkcontext->device, &shaderInfo, 0, &vertexShader));
-        // TODO: Suballocation from main allocation
-        delete code;
+        // Vertext Shader
+        {
+            uint32_t sizeInBytes;
+            char *vertexCode = platform_read_file("assets/shaders/shader.vert.spv", &sizeInBytes);
+            VkShaderModuleCreateInfo shaderInfo = {};
+            shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            shaderInfo.pCode = (uint32_t *)vertexCode;
+            shaderInfo.codeSize = sizeInBytes;
+            VK_CHECK(vkCreateShaderModule(vkcontext->device, &shaderInfo, 0, &vertexShader));
+            // TODO: Suballocation from main allocation
+            delete vertexCode;
+        }
 
-        code = platform_read_file("assets/shaders/shader.frag.spv", &sizeInBytes);
-        shaderInfo.pCode = (uint32_t *)code;
-        shaderInfo.codeSize = sizeInBytes;
-        VK_CHECK(vkCreateShaderModule(vkcontext->device, &shaderInfo, 0, &fragmentShader));
-        // TODO: Suballocation from main allocation
-        delete code;
+        // Fragment Shader]
+        {
+            uint32_t sizeInBytes;
+            char *fragCode = platform_read_file("assets/shaders/shader.frag.spv", &sizeInBytes);
+            VkShaderModuleCreateInfo shaderInfo = {};
+            shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            shaderInfo.pCode = (uint32_t *)fragCode;
+            shaderInfo.codeSize = sizeInBytes;
+            VK_CHECK(vkCreateShaderModule(vkcontext->device, &shaderInfo, 0, &fragmentShader));
+            // TODO: Suballocation from main allocation
+            delete fragCode;
+        }
 
         VkPipelineShaderStageCreateInfo vertexStage = {};
         vertexStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -395,13 +413,114 @@ bool vk_init(VkContext *vkcontext, void *window)
         VK_CHECK(vkCreateCommandPool(vkcontext->device, &poolInfo, 0, &vkcontext->commandPool));
     }
 
+    // Command Buffer
+    {
+        VkCommandBufferAllocateInfo allocInfo = cmd_alloc_info(vkcontext->commandPool);
+        VK_CHECK(vkAllocateCommandBuffers(vkcontext->device, &allocInfo, &vkcontext->cmd));
+    }
+
     // Sync Objects
     {
         VkSemaphoreCreateInfo semaInfo = {};
         semaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
         VK_CHECK(vkCreateSemaphore(vkcontext->device, &semaInfo, 0, &vkcontext->aquireSemaphore));
         VK_CHECK(vkCreateSemaphore(vkcontext->device, &semaInfo, 0, &vkcontext->submitSemaphore));
+
+        VkFenceCreateInfo fenceInfo = {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        VK_CHECK(vkCreateFence(vkcontext->device, &fenceInfo, 0, &vkcontext->imgAvailableFence));
+    }
+    // Staging Buffer
+    {
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        bufferInfo.size = MB(1);
+        VK_CHECK(vkCreateBuffer(vkcontext->device, &bufferInfo, 0, &vkcontext->stagingBuffer.buffer));
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(vkcontext->device, vkcontext->stagingBuffer.buffer, &memRequirements);
+
+        VkPhysicalDeviceMemoryProperties gpuMemProps;
+        vkGetPhysicalDeviceMemoryProperties(vkcontext->gpu, &gpuMemProps);
+
+        VkMemoryAllocateInfo allocInfo = {};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = MB(1);
+        for (uint32_t i = 0; i < gpuMemProps.memoryTypeCount; i++)
+        {
+            if (memRequirements.memoryTypeBits & (1 << i) &&
+                (gpuMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ==
+                    (VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
+            {
+                allocInfo.memoryTypeIndex = i;
+            }
+        }
+
+        VK_CHECK(vkAllocateMemory(vkcontext->device, &allocInfo, 0, &vkcontext->stagingBuffer.memory));
+        VK_CHECK(vkMapMemory(vkcontext->device, vkcontext->stagingBuffer.memory, 0, MB(1), 0, &vkcontext->stagingBuffer.data));
+        VK_CHECK(vkBindBufferMemory(vkcontext->device, vkcontext->stagingBuffer.buffer, vkcontext->stagingBuffer.memory, 0));
+    }
+
+    // Create Image
+    {
+        uint32_t fileSize = 0;
+        DDSFile *data = (DDSFile *)platform_read_file("assets/textures/cakez.DDS", &fileSize);
+        uint32_t textureSize = data->header.Width * data->header.Height * 4;
+        memcpy(vkcontext->stagingBuffer.data, &data->dataBegin, textureSize);
+
+        // TODO Assertions
+        VkImageCreateInfo imgInfo = {};
+        imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imgInfo.mipLevels = 1;
+        imgInfo.arrayLayers = 1;
+        imgInfo.imageType = VK_IMAGE_TYPE_2D;
+        imgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imgInfo.extent = {data->header.Width, data->header.Height, 1};
+        imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imgInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        // imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VK_CHECK(vkCreateImage(vkcontext->device, &imgInfo, 0, &vkcontext->image.image));
+
+        VkMemoryRequirements memRequirements;
+        vkGetImageMemoryRequirements(vkcontext->device, vkcontext->image.image, &memRequirements);
+
+        VkPhysicalDeviceMemoryProperties gpuMemProps;
+        vkGetPhysicalDeviceMemoryProperties(vkcontext->gpu, &gpuMemProps);
+        VkMemoryAllocateInfo allocInfo = {};
+        for (uint32_t i = 0; i < gpuMemProps.memoryTypeCount; i++)
+        {
+            if (memRequirements.memoryTypeBits & (1 << i) &&
+                (gpuMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+            {
+                allocInfo.memoryTypeIndex = i;
+            }
+        }
+
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = textureSize;
+
+        VK_CHECK(vkAllocateMemory(vkcontext->device, &allocInfo, 0, &vkcontext->image.memory));
+        VK_CHECK(vkBindImageMemory(vkcontext->device, vkcontext->image.image, vkcontext->image.memory, 0));
+
+        VkCommandBuffer cmd;
+        VkCommandBufferAllocateInfo cmdAlloc = cmd_alloc_info(vkcontext->commandPool);
+        VK_CHECK(vkAllocateCommandBuffers(vkcontext->device, &cmdAlloc, &cmd));
+
+        VkCommandBufferBeginInfo beginInfo = cmd_begin_info();
+        VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+
+        VkBufferImageCopy copyRegion = {};
+        copyRegion.imageExtent = {data->header.Width, data->header.Height, 1};
+        copyRegion.imageSubresource.layerCount = 1;
+        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        vkCmdCopyBufferToImage(cmd, vkcontext->stagingBuffer.buffer, vkcontext->image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+        VK_CHECK(vkEndCommandBuffer(cmd));
+
+        vkDeviceWaitIdle(vkcontext->device);
     }
 
     return true;
