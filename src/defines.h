@@ -6,6 +6,7 @@
 #define MB(x) ((uint64_t)1024 * KB(1))
 #define GB(x) ((uint64_t)1024 * MB(1))
 
+#define internal static
 #define global_variable static
 
 #define INVALID_IDX UINT32_MAX

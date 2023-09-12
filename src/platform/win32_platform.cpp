@@ -1,6 +1,11 @@
 #include <defines.h>
 #include <windows.h>
 #include "renderer/vk_renderer.cpp"
+
+// This is the game layer
+#include "game/game.cpp"
+
+// This is platform layer
 #include <platform.h>
 #include <logger.h>
 
@@ -66,10 +71,16 @@ void platform_update_window(HWND window)
 int main()
 {
     VkContext vkcontext = {};
-
+    GameState gameState = {};
     if (!platform_create_window())
     {
         NB_FATAL("FAILED TO OPEN WINDOW");
+        return -1;
+    }
+
+    if (!init_game(&gameState))
+    {
+        NB_FATAL("FAILED TO INITIALIZE GAME");
         return -1;
     }
 
@@ -82,6 +93,7 @@ int main()
     while (running)
     {
         platform_update_window(window);
+        update_game(&gameState);
         if (!vk_render(&vkcontext))
         {
             NB_FATAL("FAILED TO RENDER");

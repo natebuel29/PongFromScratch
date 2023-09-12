@@ -4,7 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${default}",
-                "${workspaceFolder}/src/renderer"
+                "${workspaceFolder}/src/renderer",
+                "${workspaceFolder}/src"
             ],
             "defines": [
                 "DEBUG"
