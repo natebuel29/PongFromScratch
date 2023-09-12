@@ -1,8 +1,8 @@
-#include <iostream>
 #include <defines.h>
 #include <windows.h>
 #include "renderer/vk_renderer.cpp"
 #include <platform.h>
+#include <logger.h>
 
 global_variable bool running = true;
 global_variable HWND window;
@@ -69,11 +69,13 @@ int main()
 
     if (!platform_create_window())
     {
+        NB_FATAL("FAILED TO OPEN WINDOW");
         return -1;
     }
 
     if (!vk_init(&vkcontext, window))
     {
+        NB_FATAL("FAILED TO INITIALIZE VULKAN");
         return -1;
     }
 
@@ -82,6 +84,7 @@ int main()
         platform_update_window(window);
         if (!vk_render(&vkcontext))
         {
+            NB_FATAL("FAILED TO RENDER");
             return -1;
         }
     }
@@ -117,23 +120,56 @@ char *platform_read_file(char *path, uint32_t *length)
             }
             else
             {
-                // TODO assert and error
-                std::cout << "Failed reading file" << std::endl;
+                NB_ASSERT(0, "Failed reading file: %s", path);
+                NB_ERROR("Failed reading file: %s", path);
             }
         }
         else
         {
-            // TODO: assert
-            std::cout << "Failed getting size of file" << std::endl;
+            NB_ASSERT(0, "Failed getting size of file: %s", path);
+            NB_ERROR("Failed getting size of file: %s", path);
         }
 
         CloseHandle(file);
     }
     else
     {
-        // TODO Assert
-        std::cout << "failed opening file" << std::endl;
+        NB_ASSERT(0, "Failed opening file: %s", path);
+        NB_ERROR("Failed opening file: %s", path);
     }
 
     return result;
+}
+
+void platform_log(const char *msg, TextColor color)
+{
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    uint32_t colorBits = 0;
+
+    switch (color)
+    {
+    case TEXT_COLOR_WHITE:
+        colorBits = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+        break;
+    case TEXT_COLOR_GREEN:
+        colorBits = FOREGROUND_GREEN;
+        break;
+    case TEXT_COLOR_YELLOW:
+        colorBits = FOREGROUND_GREEN | FOREGROUND_RED;
+        break;
+    case TEXT_COLOR_RED:
+        colorBits = FOREGROUND_RED;
+        break;
+    case TEXT_COLOR_LIGHT_READ:
+        colorBits = FOREGROUND_RED | FOREGROUND_INTENSITY;
+        break;
+    }
+
+    SetConsoleTextAttribute(consoleHandle, colorBits);
+
+#ifdef DEBUG
+    OutputDebugStringA(msg);
+#endif
+
+    WriteConsoleA(consoleHandle, msg, strlen(msg), 0, 0);
 }
