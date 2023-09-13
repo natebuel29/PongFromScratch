@@ -1,9 +1,10 @@
 #include <defines.h>
 #include <windows.h>
-#include "renderer/vk_renderer.cpp"
-
 // This is the game layer
 #include "game/game.cpp"
+
+#include "renderer/vk_shader_util.cpp"
+#include "renderer/vk_renderer.cpp"
 
 // This is platform layer
 #include <platform.h>
@@ -70,6 +71,9 @@ void platform_update_window(HWND window)
 
 int main()
 {
+    vk_compile_shader("assets/shaders/shader.vert", "assets/shaders/compiled/shader.vert.spv");
+    vk_compile_shader("assets/shaders/shader.frag", "assets/shaders/compiled/shader.frag.spv");
+
     VkContext vkcontext = {};
     GameState gameState = {};
     if (!platform_create_window())
@@ -94,7 +98,7 @@ int main()
     {
         platform_update_window(window);
         update_game(&gameState);
-        if (!vk_render(&vkcontext))
+        if (!vk_render(&vkcontext, &gameState))
         {
             NB_FATAL("FAILED TO RENDER");
             return -1;

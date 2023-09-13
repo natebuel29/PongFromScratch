@@ -1,6 +1,6 @@
-
+#ifdef NBENGINE
 #pragma once
-
+#endif
 struct GlobalData
 {
     int screenSizeX;

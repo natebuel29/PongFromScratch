@@ -4,17 +4,16 @@
             "name": "Win32",
             "includePath": [
                 "${default}",
-                "${workspaceFolder}/src/renderer",
                 "${workspaceFolder}/src"
             ],
             "defines": [
-                "DEBUG"
+                "DEBUG",
+                "NBENGINE"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "compilerPath": "cl.exe",
             "cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "windows-msvc-x64"
         }
     ],
     "version": 4

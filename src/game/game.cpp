@@ -1,4 +1,5 @@
 #include "defines.h"
+#include "logger.h"
 #include "renderer/shared_render_types.h"
 
 uint32_t constexpr MAX_ENTITIES = 100;
@@ -32,11 +33,24 @@ internal Entity *create_entity(GameState *gameState, Transform transform)
 
 void update_game(GameState *gameState)
 {
+    // This is framerate dependent
+    for (uint32_t i = 0; i < gameState->entityCount; i++)
+    {
+        Entity *e = &gameState->entities[i];
+
+        e->transform.xPos += 0.01f;
+    }
 }
 
 bool init_game(GameState *gameState)
 {
-    Entity *e = create_entity(gameState, {100.0f, 100.0f, 100.0f, 100.0f});
+    for (uint32_t i = 0; i < 10; i++)
+    {
+        for (uint32_t j = 0; j < 10; j++)
+        {
+            Entity *e = create_entity(gameState, {i * 100.0f, j * 60.0f, 70.0f, 70.0f});
+        }
+    }
 
     return true;
 }
