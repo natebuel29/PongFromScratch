@@ -249,7 +249,7 @@ internal Descriptor *vk_create_descriptor(VkContext *vkcontext, AssetTypeID asse
         {
             // Update Descriptor Set
             {
-                Image *image = vk_get_image(vkcontext, ASSET_SPRITE_CAKEZ);
+                Image *image = vk_get_image(vkcontext, assetTypeID);
 
                 DescriptorInfo descInfos[] = {
                     DescriptorInfo(vkcontext->globalUBO.buffer),

@@ -80,6 +80,8 @@ internal uint32_t get_material(GameState *gameState, AssetTypeID assetTypeID, Ve
     {
         materialIdx = create_material(gameState, assetTypeID, color);
     }
+
+    return materialIdx;
 }
 
 void update_game(GameState *gameState, InputState *input)
@@ -132,22 +134,32 @@ internal Material *get_material(GameState *gameState, uint32_t materialIdx)
 
 bool init_game(GameState *gameState)
 {
-    uint32_t counter = 0;
-    for (uint32_t i = 0; i < 10; i++)
-    {
-        for (uint32_t j = 0; j < 10; j++)
-        {
-            float r = (float)counter / 100.0f;
-            float g = r;
-            float b = 1.0f - r;
-            float a = r;
+    // uint32_t counter = 0;
+    // for (uint32_t i = 0; i < 10; i++)
+    // {
+    //     for (uint32_t j = 0; j < 10; j++)
+    //     {
+    //         float r = (float)counter / 100.0f;
+    //         float g = r;
+    //         float b = 1.0f - r;
+    //         float a = r;
 
-            Entity *e = create_entity(gameState, {i * 100.0f, j * 60.0f, 70.0f, 70.0f});
-            e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_CAKEZ, {r, g, b, a});
+    //         Entity *e = create_entity(gameState, {i * 100.0f, j * 60.0f, 70.0f, 70.0f});
+    //         e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_BALL, {r, g, b, a});
 
-            counter++;
-        }
-    }
+    //         counter++;
+    //     }
+    // }
+    float paddleSizeX = 50.0f, paddleSizeY = 100.0f, ballSize = 50.0f;
+
+    Entity *e = create_entity(gameState, {10.0f, 10.0f, paddleSizeX, paddleSizeY});
+    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
+
+    e = create_entity(gameState, {1000.0f - paddleSizeX - 20.0f, 10.0f, paddleSizeX, paddleSizeY});
+    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
+
+    e = create_entity(gameState, {1000.0f / 2.0f, 400.0f, ballSize, ballSize});
+    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_BALL);
 
     return true;
 }

@@ -81,7 +81,7 @@ bool platform_create_window()
         "vulkan_engine_class",
         "pong",
         WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_OVERLAPPED,
-        100, 100, 1600, 720, 0, 0, instance, 0);
+        100, 100, 1000, 720, 0, 0, instance, 0);
 
     if (window == 0)
     {
