@@ -1,5 +1,6 @@
 #include "assets/assets.h"
 #include "defines.h"
+#include "input.h"
 #include "logger.h"
 #include "renderer/shared_render_types.h"
 
@@ -81,14 +82,40 @@ internal uint32_t get_material(GameState *gameState, AssetTypeID assetTypeID, Ve
     }
 }
 
-void update_game(GameState *gameState)
+void update_game(GameState *gameState, InputState *input)
 {
+    float xVel = 0.0f;
+    float yVel = 0.0f;
+
+    if (key_is_down(input, A_KEY))
+    {
+        xVel = -0.1f;
+    }
+
+    if (key_is_down(input, D_KEY))
+    {
+        xVel = 0.1f;
+    }
+
+    if (key_is_down(input, W_KEY))
+    {
+        yVel = -2.0f;
+    }
+
+    if (key_is_down(input, S_KEY))
+    {
+        yVel = 2.0f;
+    }
+
+    NB_TRACE("input state is: %s", input);
+
     // This is framerate dependent
     for (uint32_t i = 0; i < gameState->entityCount; i++)
     {
         Entity *e = &gameState->entities[i];
 
-        e->transform.xPos += 0.01f;
+        e->transform.xPos += xVel;
+        e->transform.yPos += yVel;
     }
 }
 

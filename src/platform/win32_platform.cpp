@@ -7,17 +7,51 @@
 
 #include "renderer/vk_renderer.cpp"
 
+// This is the input layer
+#include "input.cpp"
+
 // This is platform layer
 #include <platform.h>
 #include <logger.h>
 
 global_variable bool running = true;
 global_variable HWND window;
+global_variable InputState input;
 
 LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
+    case WM_KEYDOWN:
+    case WM_KEYUP:
+    {
+        uint32_t keyID = INVALID_IDX;
+        bool isDown = msg == WM_KEYDOWN ? true : false;
+
+        switch ((int)wParam)
+        {
+        case 'A':
+            keyID = A_KEY;
+            break;
+        case 'D':
+            keyID = D_KEY;
+            break;
+
+        case 'S':
+            keyID = S_KEY;
+            break;
+        case 'W':
+            keyID = W_KEY;
+            break;
+        }
+
+        if (keyID < KEY_COUNT)
+        {
+            input.keys[keyID].isDown = isDown;
+            input.keys[keyID].halfTransitionCount++;
+        }
+    }
+    break;
     case WM_CLOSE:
         running = false;
         break;
@@ -94,8 +128,16 @@ int main()
 
     while (running)
     {
+        // Clear out transition count
+        {
+            for (uint32_t i = 0; i < KEY_COUNT; i++)
+            {
+                input.keys[i].halfTransitionCount = 0;
+            }
+        }
+
         platform_update_window(window);
-        update_game(&gameState);
+        update_game(&gameState, &input);
         if (!vk_render(&vkcontext, &gameState))
         {
             NB_FATAL("FAILED TO RENDER");
