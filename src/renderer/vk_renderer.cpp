@@ -1,20 +1,22 @@
 #include <vulkan/vulkan.h>
-#include <platform.h>
-#include <defines.h>
-#include <dds_structs.h>
 #ifdef WINDOWS_BUILD
 #include <vulkan/vulkan_win32.h>
 #elif LINUX_BUILD
 #endif
-#include <logger.h>
-#include <string.h>
-#include <renderer\vk_types.h>
-#include <renderer\vk_util.cpp>
-#include <renderer\vk_init.cpp>
+
+#include "dds_structs.h"
+#include "logger.h"
+#include "platform.h"
+
+#include "vk_types.h"
+#include "vk_init.cpp"
+#include "vk_util.cpp"
+#include "vk_shader_util.cpp"
 
 uint32_t constexpr MAX_IMAGES = 100;
 uint32_t constexpr MAX_DESCRIPTORS = 100;
 uint32_t constexpr MAX_RENDER_COMMANDS = 100;
+uint32_t constexpr MAX_TRANSFORMS = MAX_ENTITIES;
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
@@ -22,13 +24,15 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
     void *pUserData)
 {
-    NB_ERROR(pCallbackData->pMessage);
+    // NB_ERROR(pCallbackData->pMessage);
+    NB_ASSERT(0, pCallbackData->pMessage);
     return false;
 }
 
 struct VkContext
 {
     VkExtent2D screenSize;
+
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
     VkSurfaceKHR surface;
@@ -50,8 +54,12 @@ struct VkContext
     uint32_t renderCommandCount;
     RenderCommand renderCommands[MAX_RENDER_COMMANDS];
 
+    uint32_t transformCount;
+    Transform transforms[MAX_TRANSFORMS];
+
     Buffer stagingBuffer;
     Buffer transformStorageBuffer;
+    Buffer materialStorageBuffer;
     Buffer globalUBO;
     Buffer indexBuffer;
 
@@ -76,7 +84,7 @@ struct VkContext
     int graphicsIdx;
 };
 
-internal Image *vk_create_image(VkContext *vkcontext, AssetTypeID assetTypeID)
+Image *vk_create_image(VkContext *vkcontext, AssetTypeID assetTypeID)
 {
     Image *image = 0;
     if (vkcontext->imageCount < MAX_IMAGES)
@@ -100,16 +108,14 @@ internal Image *vk_create_image(VkContext *vkcontext, AssetTypeID assetTypeID)
 
         // TODO: Assertions
         image = &vkcontext->images[vkcontext->imageCount];
-
         *image = vk_allocate_image(vkcontext->device,
                                    vkcontext->gpu,
                                    width,
                                    height,
                                    VK_FORMAT_R8G8B8A8_UNORM);
-        image->assetTypeID = assetTypeID;
+
         if (image->image != VK_NULL_HANDLE && image->memory != VK_NULL_HANDLE)
         {
-
             VkCommandBuffer cmd;
             VkCommandBufferAllocateInfo cmdAlloc = cmd_alloc_info(vkcontext->commandPool);
             VK_CHECK(vkAllocateCommandBuffers(vkcontext->device, &cmdAlloc, &cmd));
@@ -182,9 +188,9 @@ internal Image *vk_create_image(VkContext *vkcontext, AssetTypeID assetTypeID)
                       "Failed to allocate Memory for Image: %d", assetTypeID);
             NB_ASSERT(image->memory != VK_NULL_HANDLE,
                       "Failed to allocate Memory for Image: %d", assetTypeID);
-            vkcontext->imageCount--;
             image = 0;
         }
+
         // Memory is freed
         // TODO: Allocater
         delete data;
@@ -193,6 +199,7 @@ internal Image *vk_create_image(VkContext *vkcontext, AssetTypeID assetTypeID)
     {
         NB_ASSERT(0, "Reached Maximum amount of Images");
     }
+
     return image;
 }
 
@@ -242,12 +249,13 @@ internal Descriptor *vk_create_descriptor(VkContext *vkcontext, AssetTypeID asse
         {
             // Update Descriptor Set
             {
-                Image *image = vk_get_image(vkcontext, assetTypeID);
+                Image *image = vk_get_image(vkcontext, ASSET_SPRITE_CAKEZ);
 
                 DescriptorInfo descInfos[] = {
                     DescriptorInfo(vkcontext->globalUBO.buffer),
                     DescriptorInfo(vkcontext->transformStorageBuffer.buffer),
-                    DescriptorInfo(vkcontext->sampler, image->view)};
+                    DescriptorInfo(vkcontext->sampler, image->view),
+                    DescriptorInfo(vkcontext->materialStorageBuffer.buffer)};
 
                 VkWriteDescriptorSet writes[] = {
                     write_set(desc->set, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -255,7 +263,9 @@ internal Descriptor *vk_create_descriptor(VkContext *vkcontext, AssetTypeID asse
                     write_set(desc->set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                               &descInfos[1], 1, 1),
                     write_set(desc->set, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                              &descInfos[2], 2, 1)};
+                              &descInfos[2], 2, 1),
+                    write_set(desc->set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                              &descInfos[3], 3, 1)};
 
                 vkUpdateDescriptorSets(vkcontext->device, ArraySize(writes), writes, 0, 0);
 
@@ -266,29 +276,26 @@ internal Descriptor *vk_create_descriptor(VkContext *vkcontext, AssetTypeID asse
         else
         {
             desc = 0;
-            vkcontext->descCount--;
-            NB_ASSERT(0, "Failed to allocate descriptor set for AssetTypeId: %d", assetTypeID);
-            NB_ERROR("Failed to allocate descriptor set for AssetTypeID: %d", assetTypeID);
+            NB_ASSERT(0, "Failed to Allocate Descriptor Set for AssetTypeID: %d", assetTypeID);
+            NB_ERROR("Failed to Allocate Descriptor Set for AssetTypeID: %d", assetTypeID);
         }
     }
     else
     {
-
-        NB_ASSERT(0, "Reached maximum amount of descriptors");
-        NB_ERROR("Reached maximum amount of descriptors");
+        NB_ASSERT(0, "Reached Maximum amount of Descriptors");
     }
-
     return desc;
 }
 
-internal Descriptor *vk_get_descriptor(VkContext *vkcontext, AssetTypeID assetTypeId)
+internal Descriptor *vk_get_descriptor(VkContext *vkcontext, AssetTypeID assetTypeID)
 {
     Descriptor *desc = 0;
 
     for (uint32_t i = 0; i < vkcontext->descCount; i++)
     {
         Descriptor *d = &vkcontext->descriptors[i];
-        if (d->assetTypeID == assetTypeId)
+
+        if (d->assetTypeID == assetTypeID)
         {
             desc = d;
             break;
@@ -297,7 +304,7 @@ internal Descriptor *vk_get_descriptor(VkContext *vkcontext, AssetTypeID assetTy
 
     if (!desc)
     {
-        desc = vk_create_descriptor(vkcontext, assetTypeId);
+        desc = vk_create_descriptor(vkcontext, assetTypeID);
     }
 
     return desc;
@@ -305,17 +312,21 @@ internal Descriptor *vk_get_descriptor(VkContext *vkcontext, AssetTypeID assetTy
 
 internal RenderCommand *vk_add_render_command(VkContext *vkcontext, Descriptor *desc)
 {
+    NB_ASSERT(desc, "No Descriptor supplied!");
+
     RenderCommand *rc = 0;
 
     if (vkcontext->renderCommandCount < MAX_RENDER_COMMANDS)
     {
         rc = &vkcontext->renderCommands[vkcontext->renderCommandCount++];
+        *rc = {};
         rc->desc = desc;
+        rc->pushData.transformIdx = vkcontext->transformCount;
     }
     else
     {
-        NB_ASSERT(0, "Reached maxium amount of render commands");
-        NB_ERROR("Reached maxium amount of render commands");
+        NB_ERROR(0, "Reached Maximum amount of Render Commands");
+        NB_ASSERT(0, "Reached Maximum amount of Render Commands");
     }
 
     return rc;
@@ -323,6 +334,9 @@ internal RenderCommand *vk_add_render_command(VkContext *vkcontext, Descriptor *
 
 bool vk_init(VkContext *vkcontext, void *window)
 {
+    vk_compile_shader("assets/shaders/shader.vert", "assets/shaders/compiled/shader.vert.spv");
+    vk_compile_shader("assets/shaders/shader.frag", "assets/shaders/compiled/shader.frag.spv");
+
     platform_get_window_size(&vkcontext->screenSize.width, &vkcontext->screenSize.height);
 
     VkApplicationInfo appInfo = {};
@@ -581,7 +595,8 @@ bool vk_init(VkContext *vkcontext, void *window)
         VkDescriptorSetLayoutBinding layoutBindings[] = {
             layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1, 0),
             layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1, 1),
-            layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, 2)};
+            layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, 2),
+            layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, 3)};
 
         VkDescriptorSetLayoutCreateInfo layoutInfo = {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -593,15 +608,15 @@ bool vk_init(VkContext *vkcontext, void *window)
 
     // Create Pipeline Layout
     {
-        VkPushConstantRange pc = {};
-        pc.size = sizeof(PushData);
-        pc.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        VkPushConstantRange pushConstant = {};
+        pushConstant.size = sizeof(PushData);
+        pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
         VkPipelineLayoutCreateInfo layoutInfo = {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layoutInfo.setLayoutCount = 1;
         layoutInfo.pSetLayouts = &vkcontext->setLayout;
-        layoutInfo.pPushConstantRanges = &pc;
+        layoutInfo.pPushConstantRanges = &pushConstant;
         layoutInfo.pushConstantRangeCount = 1;
         VK_CHECK(vkCreatePipelineLayout(vkcontext->device, &layoutInfo, 0, &vkcontext->pipeLayout));
     }
@@ -725,7 +740,9 @@ bool vk_init(VkContext *vkcontext, void *window)
 
     // Staging Buffer
     {
-        vkcontext->stagingBuffer = vk_allocate_buffer(vkcontext->device, vkcontext->gpu, MB(1), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        vkcontext->stagingBuffer = vk_allocate_buffer(vkcontext->device, vkcontext->gpu,
+                                                      MB(1), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
     }
 
     // Create Image
@@ -760,6 +777,16 @@ bool vk_init(VkContext *vkcontext, void *window)
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
     }
 
+    // Create Material Storage Buffer
+    {
+        vkcontext->materialStorageBuffer = vk_allocate_buffer(
+            vkcontext->device,
+            vkcontext->gpu,
+            sizeof(MaterialData) * MAX_MATERIALS,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    }
+
     // Create Global Uniform Buffer Object
     {
         vkcontext->globalUBO = vk_allocate_buffer(
@@ -775,6 +802,7 @@ bool vk_init(VkContext *vkcontext, void *window)
 
         vk_copy_to_buffer(&vkcontext->globalUBO, &globalData, sizeof(globalData));
     }
+
     // Create Index Buffer
     {
         vkcontext->indexBuffer = vk_allocate_buffer(
@@ -784,26 +812,20 @@ bool vk_init(VkContext *vkcontext, void *window)
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-        // Copy Indicies to the buffer
+        // Copy Indices to the buffer
         {
-            uint32_t indicies[] = {0,
-                                   1,
-                                   2,
-                                   2,
-                                   3,
-                                   0};
-
-            vk_copy_to_buffer(&vkcontext->indexBuffer, &indicies, sizeof(uint32_t) * 6);
+            uint32_t indices[] = {0, 1, 2, 2, 3, 0};
+            vk_copy_to_buffer(&vkcontext->indexBuffer, &indices, sizeof(uint32_t) * 6);
         }
     }
 
     // Create Descriptor Pool
     {
-
         VkDescriptorPoolSize poolSizes[] = {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
 
         VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -813,16 +835,7 @@ bool vk_init(VkContext *vkcontext, void *window)
         VK_CHECK(vkCreateDescriptorPool(vkcontext->device, &poolInfo, 0, &vkcontext->descPool));
     }
 
-    // Create default white descriptor
-    {
-        Descriptor *desc = vk_create_descriptor(vkcontext, ASSET_SPRITE_WHITE);
-        if (!desc)
-        {
-            NB_ASSERT(0, "Failed to create defeault white descriptor");
-            NB_FATAL("Failed to create default white descriptor");
-            return false;
-        }
-    }
+    // Create Descriptor Set
 
     return true;
 }
@@ -835,20 +848,40 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
     VK_CHECK(vkWaitForFences(vkcontext->device, 1, &vkcontext->imgAvailableFence, VK_TRUE, UINT64_MAX));
     VK_CHECK(vkResetFences(vkcontext->device, 1, &vkcontext->imgAvailableFence));
 
-    // Copy transforms to the buffer
-
+    // Entity Rendering
     {
-        vk_copy_to_buffer(&vkcontext->transformStorageBuffer, &gameState->entities, sizeof(Transform) * gameState->entityCount);
+
+        for (uint32_t i = 0; i < gameState->entityCount; i++)
+        {
+            Entity *e = &gameState->entities[i];
+            Material *m = get_material(gameState, e->transform.materialIdx);
+
+            Descriptor *desc = vk_get_descriptor(vkcontext, m->assetTypeID);
+
+            if (desc)
+            {
+                RenderCommand *rc = vk_add_render_command(vkcontext, desc);
+                if (rc)
+                {
+                    rc->instanceCount = 1;
+                }
+            }
+
+            vkcontext->transforms[vkcontext->transformCount++] = e->transform;
+        }
     }
 
-    Descriptor *desc = vk_get_descriptor(vkcontext, ASSET_SPRITE_CAKEZ);
-    if (desc)
+    // Copy Data to buffers
     {
-        RenderCommand *rc = vk_add_render_command(vkcontext, desc);
-        if (rc)
+        vk_copy_to_buffer(&vkcontext->transformStorageBuffer, &vkcontext->transforms, sizeof(Transform) * vkcontext->transformCount);
+        vkcontext->transformCount = 0;
+
+        MaterialData materialData[MAX_MATERIALS];
+        for (uint32_t i = 0; i < gameState->materialCount; i++)
         {
-            rc->renderCount = gameState->entityCount;
+            materialData[i] = gameState->materials[i].materialData;
         }
+        vk_copy_to_buffer(&vkcontext->materialStorageBuffer, materialData, sizeof(MaterialData) * gameState->materialCount);
     }
 
     // This waits on the timeout until the image is ready, if timeout reached -> VK_TIMEOUT
@@ -883,20 +916,25 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
 
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
+
     vkCmdBindIndexBuffer(cmd, vkcontext->indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkcontext->pipeline);
 
-    // Rendering Commands
+    // Render Loop
     {
         for (uint32_t i = 0; i < vkcontext->renderCommandCount; i++)
         {
             RenderCommand *rc = &vkcontext->renderCommands[i];
+
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkcontext->pipeLayout,
                                     0, 1, &rc->desc->set, 0, 0);
+
             vkCmdPushConstants(cmd, vkcontext->pipeLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushData), &rc->pushData);
-            vkCmdDrawIndexed(cmd, 6, rc->renderCount, 0, 0, 0);
+
+            vkCmdDrawIndexed(cmd, 6, rc->instanceCount, 0, 0, 0);
         }
-        // Resetrender command count for next frame
+
+        // Reset the Render Commands for next Frame
         vkcontext->renderCommandCount = 0;
     }
 

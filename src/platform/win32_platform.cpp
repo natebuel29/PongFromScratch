@@ -5,7 +5,6 @@
 
 #include "assets/assets.cpp"
 
-#include "renderer/vk_shader_util.cpp"
 #include "renderer/vk_renderer.cpp"
 
 // This is platform layer
@@ -73,9 +72,6 @@ void platform_update_window(HWND window)
 
 int main()
 {
-    vk_compile_shader("assets/shaders/shader.vert", "assets/shaders/compiled/shader.vert.spv");
-    vk_compile_shader("assets/shaders/shader.frag", "assets/shaders/compiled/shader.frag.spv");
-
     VkContext vkcontext = {};
     GameState gameState = {};
     if (!platform_create_window())

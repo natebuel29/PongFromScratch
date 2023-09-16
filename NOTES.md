@@ -1,8 +1,10 @@
 # VS CODE COMMANDS
 
-- ctrl + shift + e -> highlight and traverse project explorer
+- shift + up/down arrows -> highlight lines
+- alt + up/down arrow -> move line up or down
 - home -> beginning of line
 - end -> end of line
+- ctrl + shift + e -> highlight and traverse project explorer
 - ctrl - home -> top of page
 - ctrl - end -> bottom of page
 - ctrl + n -> create new file
@@ -15,5 +17,6 @@
 - ctrl + shift + y -> debug terminal
 - ctrl + shift + b -> build & compile program
 - F5 -> run program
+-
 
 https://dev.to/vaidotas/get-faster-vscode-navigation-without-a-mouse-3d0m

@@ -65,7 +65,7 @@ struct Descriptor
 
 struct RenderCommand
 {
-    uint32_t renderCount;
+    uint32_t instanceCount;
     Descriptor *desc;
     PushData pushData;
 };
