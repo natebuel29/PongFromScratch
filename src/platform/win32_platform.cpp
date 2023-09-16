@@ -3,6 +3,8 @@
 // This is the game layer
 #include "game/game.cpp"
 
+#include "assets/assets.cpp"
+
 #include "renderer/vk_shader_util.cpp"
 #include "renderer/vk_renderer.cpp"
 

@@ -94,7 +94,7 @@ Buffer vk_allocate_buffer(VkDevice device, VkPhysicalDevice gpu, uint32_t size, 
     return buffer;
 }
 
-void vk_copy_to_buffer(Buffer *buffer, void *data, uint32_t size)
+void vk_copy_to_buffer(Buffer *buffer, const void *data, uint32_t size)
 {
     NB_ASSERT(buffer->size >= size, "Buffer too small: %d for data: %d", buffer->size, size);
     if (buffer->data)
