@@ -12,3 +12,5 @@
 #define INVALID_IDX UINT32_MAX
 
 #define ArraySize(arr) sizeof((arr)) / sizeof((arr[0]))
+
+#define BIT(i) (1 << i)

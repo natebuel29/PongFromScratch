@@ -424,7 +424,6 @@ bool vk_init(VkContext *vkcontext, void *window)
                     {
                         vkcontext->graphicsIdx = j;
                         vkcontext->gpu = gpu;
-                        break;
                     }
                 }
             }
@@ -477,7 +476,6 @@ bool vk_init(VkContext *vkcontext, void *window)
             if (format.format == VK_FORMAT_B8G8R8A8_SRGB)
             {
                 vkcontext->surfaceFormat = format;
-                break;
             }
         }
 
