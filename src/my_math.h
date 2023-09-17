@@ -1,5 +1,12 @@
 #pragma once
 
+struct Vec2
+{
+
+    float x;
+    float y;
+};
+
 struct Vec4
 {
     union
@@ -26,3 +33,19 @@ struct Vec4
         return r == other.r && g == other.g && b == other.b && a == other.a;
     }
 };
+
+float clamp(float value, float a, float b)
+{
+    if (value < a)
+    {
+        return a;
+    }
+    else if (value > b)
+    {
+        return b;
+    }
+    else
+    {
+        return value;
+    }
+}

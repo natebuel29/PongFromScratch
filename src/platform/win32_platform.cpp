@@ -60,7 +60,7 @@ LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, 
     return DefWindowProcA(window, msg, wParam, lParam);
 }
 
-bool platform_create_window()
+bool platform_create_window(Vec2 screenSize)
 {
     HINSTANCE instance = GetModuleHandleA(0);
 
@@ -76,12 +76,23 @@ bool platform_create_window()
         return false;
     }
 
+    uint32_t windowStyle = WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_OVERLAPPED;
+
+    // obtain the size of the border
+    {
+        RECT borderRect = {};
+        AdjustWindowRectEx(&borderRect, windowStyle, 0, WS_EX_APPWINDOW);
+
+        // Grow the screenSize by the size of the border of the window;
+        screenSize.x += borderRect.right - borderRect.left;
+        screenSize.y += borderRect.bottom - borderRect.top;
+    }
     window = CreateWindowExA(
         WS_EX_APPWINDOW,
         "vulkan_engine_class",
         "pong",
-        WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_OVERLAPPED,
-        100, 100, 1000, 720, 0, 0, instance, 0);
+        windowStyle,
+        100, 100, screenSize.x, screenSize.y, 0, 0, instance, 0);
 
     if (window == 0)
     {
@@ -108,7 +119,9 @@ int main()
 {
     VkContext vkcontext = {};
     GameState gameState = {};
-    if (!platform_create_window())
+    input.screenSize = {1000,
+                        700};
+    if (!platform_create_window(input.screenSize))
     {
         NB_FATAL("FAILED TO OPEN WINDOW");
         return -1;
@@ -126,6 +139,11 @@ int main()
         return -1;
     }
 
+    LARGE_INTEGER ticksPerSecond, lastTickCount, currentTickCount;
+    QueryPerformanceFrequency(&ticksPerSecond);
+    QueryPerformanceCounter(&lastTickCount);
+    float dt;
+
     while (running)
     {
         // Clear out transition count
@@ -137,7 +155,26 @@ int main()
         }
 
         platform_update_window(window);
-        update_game(&gameState, &input);
+
+        // Evaludate Delta Time
+        {
+            QueryPerformanceCounter(&currentTickCount);
+
+            uint64_t elapsedTicks = currentTickCount.QuadPart - lastTickCount.QuadPart;
+
+            // Convert to Microseconds to not loose precision, by deviding a small numbner by a large one
+            uint64_t elapsedTimeInMicroseconds = (elapsedTicks * 1000000) / ticksPerSecond.QuadPart;
+
+            lastTickCount = currentTickCount;
+
+            // Time in milliseconds
+            dt = (float)elapsedTimeInMicroseconds / 1000.0f;
+
+            // Time in Seconds
+            dt /= 1000.0f;
+        }
+
+        update_game(&gameState, &input, dt);
         if (!vk_render(&vkcontext, &gameState))
         {
             NB_FATAL("FAILED TO RENDER");

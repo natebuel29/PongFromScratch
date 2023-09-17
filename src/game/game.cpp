@@ -17,6 +17,7 @@ enum Components
 struct Entity
 {
     uint32_t compMask;
+    Vec2 vel;
     Transform transform;
 };
 
@@ -110,11 +111,9 @@ internal uint32_t get_material(GameState *gameState, AssetTypeID assetTypeID, Ve
     return materialIdx;
 }
 
-void update_game(GameState *gameState, InputState *input)
+void update_game(GameState *gameState, InputState *input, float dt)
 {
-    float vel = 0.1f;
-
-    NB_TRACE("input state is: %s", input);
+    float speed = 500.0f;
 
     // This is framerate dependent
     for (uint32_t i = 0; i < gameState->entityCount; i++)
@@ -123,16 +122,56 @@ void update_game(GameState *gameState, InputState *input)
 
         if (has_component(e, COMPONENT_LEFT_PADDLE))
         {
+            e->vel.y = 0;
+
             if (key_is_down(input, W_KEY))
             {
-                e->transform.yPos -= vel;
+                e->vel.y = -speed;
             }
-
             if (key_is_down(input, S_KEY))
             {
-                e->transform.yPos += vel;
+                e->vel.y = speed;
+            }
+
+            // Confine the paddle to the screen
+            {
+                e->transform.yPos = clamp(e->transform.yPos, 0, input->screenSize.y - e->transform.sizeY);
             }
         }
+
+        if (has_component(e, COMPONENT_BALL))
+        {
+            if (e->transform.xPos + e->transform.sizeX > input->screenSize.x)
+            {
+                e->vel.x = -e->vel.x;
+
+                e->transform.xPos -= 2 * (e->transform.xPos + e->transform.sizeX - input->screenSize.x);
+            }
+
+            if (e->transform.xPos < 0.0f)
+            {
+                e->vel.x = -e->vel.x;
+
+                e->transform.xPos = -e->transform.xPos;
+            }
+
+            if (e->transform.yPos + e->transform.sizeX > input->screenSize.y)
+            {
+                e->vel.y = -e->vel.y;
+
+                e->transform.yPos -= 2 * (e->transform.yPos + e->transform.sizeY - input->screenSize.y);
+            }
+
+            if (e->transform.yPos < 0.0f)
+            {
+                e->vel.y = -e->vel.y;
+
+                e->transform.yPos = -e->transform.yPos;
+            }
+        }
+
+        e->transform.xPos += e->vel.x * dt;
+        e->transform.yPos += e->vel.y * dt;
     }
 }
 
@@ -149,22 +188,6 @@ internal Material *get_material(GameState *gameState, uint32_t materialIdx)
 
 bool init_game(GameState *gameState)
 {
-    // uint32_t counter = 0;
-    // for (uint32_t i = 0; i < 10; i++)
-    // {
-    //     for (uint32_t j = 0; j < 10; j++)
-    //     {
-    //         float r = (float)counter / 100.0f;
-    //         float g = r;
-    //         float b = 1.0f - r;
-    //         float a = r;
-
-    //         Entity *e = create_entity(gameState, {i * 100.0f, j * 60.0f, 70.0f, 70.0f});
-    //         e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_BALL, {r, g, b, a});
-
-    //         counter++;
-    //     }
-    // }
     float paddleSizeX = 50.0f, paddleSizeY = 100.0f, ballSize = 50.0f;
 
     Entity *e = create_entity(gameState, {10.0f, 10.0f, paddleSizeX, paddleSizeY});
@@ -179,7 +202,7 @@ bool init_game(GameState *gameState)
     e = create_entity(gameState, {1000.0f / 2.0f, 400.0f, ballSize, ballSize});
     add_component(e, COMPONENT_BALL);
 
-    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
-
+    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_BALL);
+    e->vel = {500.0f, 250.0f};
     return true;
 }

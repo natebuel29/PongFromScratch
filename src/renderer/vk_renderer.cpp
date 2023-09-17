@@ -820,10 +820,10 @@ bool vk_init(VkContext *vkcontext, void *window)
     // Create Descriptor Pool
     {
         VkDescriptorPoolSize poolSizes[] = {
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2}};
 
         VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -893,7 +893,7 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
 
     // Clear Color to Yellow
     VkClearValue clearValue = {};
-    clearValue.color = {1, 1, 0, 1};
+    clearValue.color = {0, 0, 0, 1};
 
     VkRenderPassBeginInfo rpBeginInfo = {};
     rpBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
