@@ -127,7 +127,7 @@ int main()
         return -1;
     }
 
-    if (!init_game(&gameState))
+    if (!init_game(&gameState, &input))
     {
         NB_FATAL("FAILED TO INITIALIZE GAME");
         return -1;

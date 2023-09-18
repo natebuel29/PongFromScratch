@@ -18,7 +18,10 @@ struct Entity
 {
     uint32_t compMask;
     Vec2 vel;
-    Transform transform;
+    Vec2 origin;
+    uint32_t materialIdx;
+    Vec2 spriteOffset;
+    Rect boundingBox;
 };
 
 struct Material
@@ -54,13 +57,18 @@ internal void remove_component(Entity *e, Components c)
     e->compMask &= ~c;
 }
 
-internal Entity *create_entity(GameState *gameState, Transform transform)
+internal Entity *create_entity(GameState *gameState,
+                               Vec2 origin,
+                               Vec2 spriteOffset,
+                               Rect boundingBox)
 {
     Entity *e = 0;
     if (gameState->entityCount < MAX_ENTITIES)
     {
         e = &gameState->entities[gameState->entityCount++];
-        e->transform = transform;
+        e->origin = origin;
+        e->spriteOffset = spriteOffset;
+        e->boundingBox = boundingBox;
     }
     else
     {
@@ -132,46 +140,47 @@ void update_game(GameState *gameState, InputState *input, float dt)
             {
                 e->vel.y = speed;
             }
-
-            // Confine the paddle to the screen
+            // Confine the Paddle to the screen
             {
-                e->transform.yPos = clamp(e->transform.yPos, 0, input->screenSize.y - e->transform.sizeY);
+                e->origin.y = clamp(e->origin.y,
+                                    e->boundingBox.size.y / 2.0f,
+                                    input->screenSize.y - e->boundingBox.size.y / 2.0f);
             }
         }
 
         if (has_component(e, COMPONENT_BALL))
         {
-            if (e->transform.xPos + e->transform.sizeX > input->screenSize.x)
+            if (e->origin.x + e->boundingBox.offset.x + e->boundingBox.size.x > input->screenSize.x)
             {
                 e->vel.x = -e->vel.x;
 
-                e->transform.xPos -= 2 * (e->transform.xPos + e->transform.sizeX - input->screenSize.x);
+                e->origin.x -= 2 * (e->origin.x + e->boundingBox.offset.x + e->boundingBox.size.x - input->screenSize.x);
             }
 
-            if (e->transform.xPos < 0.0f)
+            if (e->origin.x + e->boundingBox.offset.x < 0.0f)
             {
                 e->vel.x = -e->vel.x;
 
-                e->transform.xPos = -e->transform.xPos;
+                e->origin.x -= 2 * (e->origin.x + e->boundingBox.offset.x);
             }
 
-            if (e->transform.yPos + e->transform.sizeX > input->screenSize.y)
+            if (e->origin.y + e->boundingBox.offset.y + e->boundingBox.size.y > input->screenSize.y)
             {
                 e->vel.y = -e->vel.y;
 
-                e->transform.yPos -= 2 * (e->transform.yPos + e->transform.sizeY - input->screenSize.y);
+                e->origin.y -= 2 * (e->origin.y + e->boundingBox.offset.y + e->boundingBox.size.y - input->screenSize.y);
             }
 
-            if (e->transform.yPos < 0.0f)
+            if (e->origin.y + e->boundingBox.offset.y < 0.0f)
             {
                 e->vel.y = -e->vel.y;
 
-                e->transform.yPos = -e->transform.yPos;
+                e->origin.y -= 2 * (e->origin.y + e->boundingBox.offset.y);
             }
         }
 
-        e->transform.xPos += e->vel.x * dt;
-        e->transform.yPos += e->vel.y * dt;
+        e->origin.x += e->vel.x * dt;
+        e->origin.y += e->vel.y * dt;
     }
 }
 
@@ -186,23 +195,35 @@ internal Material *get_material(GameState *gameState, uint32_t materialIdx)
     return m;
 }
 
-bool init_game(GameState *gameState)
+bool init_game(GameState *gameState, InputState *input)
 {
-    float paddleSizeX = 50.0f, paddleSizeY = 100.0f, ballSize = 50.0f;
+    Vec2 paddleSize = get_texture_size(ASSET_SPRITE_PADDLE);
+    Vec2 ballSize = get_texture_size(ASSET_SPRITE_BALL);
+    Vec2 spriteOffsetPaddle = paddleSize / 2.0f * -1.0f;
+    Vec2 spriteOffsetBall = ballSize / 2.0f * -1.0f;
 
-    Entity *e = create_entity(gameState, {10.0f, 10.0f, paddleSizeX, paddleSizeY});
+    // Left Paddle
+    Entity *e = create_entity(gameState, {10.0f + paddleSize.x / 2.0f, input->screenSize.y / 2.0f}, spriteOffsetPaddle, {spriteOffsetPaddle, paddleSize});
     add_component(e, COMPONENT_LEFT_PADDLE);
-    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
+    e->materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
 
-    e = create_entity(gameState, {1000.0f - paddleSizeX - 20.0f, 10.0f, paddleSizeX, paddleSizeY});
+    // Right Paddle
+    e = create_entity(gameState,
+                      {input->screenSize.x - 10.0f - paddleSize.x / 2.0f, input->screenSize.y / 2.0f},
+                      spriteOffsetPaddle,
+                      {spriteOffsetPaddle, paddleSize});
     add_component(e, COMPONENT_RIGHT_PADDLE);
 
-    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
+    e->materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
 
-    e = create_entity(gameState, {1000.0f / 2.0f, 400.0f, ballSize, ballSize});
+    // Ball
+    e = create_entity(gameState,
+                      {input->screenSize.x / 2.0f, input->screenSize.y / 2.0f},
+                      spriteOffsetBall,
+                      {spriteOffsetBall, ballSize});
     add_component(e, COMPONENT_BALL);
 
-    e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_BALL);
+    e->materialIdx = create_material(gameState, ASSET_SPRITE_BALL);
     e->vel = {500.0f, 250.0f};
     return true;
 }

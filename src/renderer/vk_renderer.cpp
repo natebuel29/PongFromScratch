@@ -852,7 +852,7 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
         for (uint32_t i = 0; i < gameState->entityCount; i++)
         {
             Entity *e = &gameState->entities[i];
-            Material *m = get_material(gameState, e->transform.materialIdx);
+            Material *m = get_material(gameState, e->materialIdx);
 
             Descriptor *desc = vk_get_descriptor(vkcontext, m->assetTypeID);
 
@@ -865,7 +865,14 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
                 }
             }
 
-            vkcontext->transforms[vkcontext->transformCount++] = e->transform;
+            Vec2 textureSize = get_texture_size(m->assetTypeID);
+            Transform t = {};
+            t.materialIdx = e->materialIdx;
+            t.xPos = e->origin.x + e->spriteOffset.x;
+            t.yPos = e->origin.y + e->spriteOffset.y;
+            t.sizeX = textureSize.x;
+            t.sizeY = textureSize.y;
+            vkcontext->transforms[vkcontext->transformCount++] = t;
         }
     }
 

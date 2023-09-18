@@ -5,6 +5,26 @@ struct Vec2
 
     float x;
     float y;
+
+    Vec2 operator/(float scalar)
+    {
+        return {x / scalar, y / scalar};
+    }
+
+    Vec2 operator*(float scalar)
+    {
+        return {x * scalar, y * scalar};
+    }
+};
+
+struct Rect
+{
+    union
+    {
+        Vec2 pos;
+        Vec2 offset;
+    };
+    Vec2 size;
 };
 
 struct Vec4
