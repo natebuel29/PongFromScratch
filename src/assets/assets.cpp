@@ -36,6 +36,15 @@ const char *get_asset(AssetTypeID assetTypeID)
     }
     break;
 
+    case ASSET_SPRITE_FONT_ATLAS:
+    {
+
+        uint32_t size;
+        const char *data = platform_read_file("assets/textures/Font_Atlas_mono_5_10.DDSaddle.DDS", &size);
+        return data;
+    }
+    break;
+
     default:
         NB_ASSERT(0, "Unrecognized Asset Type ID: %d", assetTypeID);
     }
@@ -43,26 +52,37 @@ const char *get_asset(AssetTypeID assetTypeID)
     return 0;
 }
 
-Vec2 get_texture_size(AssetTypeID assetTypeID)
+Texture get_texture(AssetTypeID assetTypeID)
 {
-    Vec2 size = {};
+    Texture texture = {};
     switch (assetTypeID)
     {
     case ASSET_SPRITE_WHITE:
     {
-        size = {1.0f, 1.0f};
+        texture.size = {1.0f, 1.0f};
+        texture.subSize = texture.size;
     }
     break;
 
     case ASSET_SPRITE_BALL:
     {
-        size = {50.0f, 50.0f};
+        texture.size = {50.0f, 50.0f};
+        texture.subSize = texture.size;
     }
     break;
 
     case ASSET_SPRITE_PADDLE:
     {
-        size = {50.0f, 100.0f};
+        texture.size = {50.0f, 100.0f};
+        texture.subSize = texture.size;
+    }
+    break;
+
+    case ASSET_SPRITE_FONT_ATLAS:
+    {
+        // scaled by 3x
+        texture.size = {240.0f, 240.0f};
+        texture.subSize = {15.0f, 30.0f};
     }
     break;
 
@@ -70,5 +90,5 @@ Vec2 get_texture_size(AssetTypeID assetTypeID)
         NB_ASSERT(0, "Unrecognized Asset Type ID: %d", assetTypeID);
     }
 
-    return size;
+    return texture;
 }

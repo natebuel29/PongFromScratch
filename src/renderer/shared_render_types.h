@@ -15,6 +15,10 @@ struct Transform
     float yPos;
     float sizeX;
     float sizeY;
+    float topV;
+    float bottomV;
+    float leftU;
+    float rightU;
     int materialIdx;
 };
 

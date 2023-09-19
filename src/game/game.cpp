@@ -142,8 +142,8 @@ internal Rect get_bounding_box(Entity *e)
 
 bool init_game(GameState *gameState, InputState *input)
 {
-    Vec2 paddleSize = get_texture_size(ASSET_SPRITE_PADDLE);
-    Vec2 ballSize = get_texture_size(ASSET_SPRITE_BALL);
+    Vec2 paddleSize = get_texture(ASSET_SPRITE_PADDLE).subSize;
+    Vec2 ballSize = get_texture(ASSET_SPRITE_BALL).subSize;
     Vec2 spriteOffsetPaddle = paddleSize / 2.0f * -1.0f;
     Vec2 spriteOffsetBall = ballSize / 2.0f * -1.0f;
 
@@ -204,7 +204,7 @@ void update_game(GameState *gameState, InputState *input, float dt)
             e->origin = e->origin + e->vel * dt;
         }
 
-            if (has_component(e, COMPONENT_RIGHT_PADDLE))
+        if (has_component(e, COMPONENT_RIGHT_PADDLE))
         {
             e->vel = {};
 

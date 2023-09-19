@@ -332,6 +332,36 @@ internal RenderCommand *vk_add_render_command(VkContext *vkcontext, Descriptor *
     return rc;
 }
 
+internal void vk_add_transform(
+    VkContext *vkcontext,
+    uint32_t materialIdx,
+    AssetTypeID assetTypeID,
+    Vec2 pos,
+    uint32_t animationIdx = 0)
+{
+
+    Texture texture = get_texture(assetTypeID);
+
+    uint32_t cols = texture.size.x / texture.subSize.x;
+    uint32_t rows = texture.size.y / texture.subSize.y;
+
+    float uvWidth = 1.0f / (float)cols;
+    float uvHeight = 1.0f / (float)rows;
+
+    Transform t = {};
+    t.materialIdx = materialIdx;
+    t.xPos = pos.x;
+    t.yPos = pos.y;
+    t.sizeX = texture.subSize.x;
+    t.sizeY = texture.subSize.y;
+    t.topV = float(animationIdx / cols) * uvHeight;
+    t.bottomV = t.topV + uvHeight;
+    t.leftU = float(animationIdx % cols) * uvWidth;
+    t.rightU = t.leftU + uvWidth;
+
+    vkcontext->transforms[vkcontext->transformCount++] = t;
+}
+
 bool vk_init(VkContext *vkcontext, void *window)
 {
     vk_compile_shader("assets/shaders/shader.vert", "assets/shaders/compiled/shader.vert.spv");
@@ -864,15 +894,7 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
                     rc->instanceCount = 1;
                 }
             }
-
-            Vec2 textureSize = get_texture_size(m->assetTypeID);
-            Transform t = {};
-            t.materialIdx = e->materialIdx;
-            t.xPos = e->origin.x + e->spriteOffset.x;
-            t.yPos = e->origin.y + e->spriteOffset.y;
-            t.sizeX = textureSize.x;
-            t.sizeY = textureSize.y;
-            vkcontext->transforms[vkcontext->transformCount++] = t;
+            vk_add_transform(vkcontext, e->materialIdx, m->assetTypeID, e->origin + e->spriteOffset);
         }
     }
 
