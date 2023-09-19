@@ -1,5 +1,7 @@
 #pragma once
 
+#include "logger.h"
+
 struct Vec2
 {
 
@@ -15,7 +17,41 @@ struct Vec2
     {
         return {x * scalar, y * scalar};
     }
+
+    Vec2 operator-(Vec2 other)
+    {
+        return Vec2{x - other.x, y - other.y};
+    }
+
+    Vec2 operator+(Vec2 other)
+    {
+        return Vec2{x + other.x, y + other.y};
+    }
 };
+
+bool line_intersection(Vec2 a, Vec2 b, Vec2 c, Vec2 d, Vec2 *collisionPoint)
+{
+    NB_ASSERT(collisionPoint, "No collision point supplied!");
+
+    // Vector from a to b
+    Vec2 r = (b - a);
+
+    // Vector from c to d
+    Vec2 s = (d - c);
+
+    // Dot Product with (r dot s)
+    float d1 = r.x * s.y - r.y * s.x;
+    float u = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / d1;
+    float t = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / d1;
+
+    // If they intersect, return where
+    if (0 <= u && u <= 1 && 0 <= t && t <= 1)
+    {
+        *collisionPoint = a + r * t;
+        return true;
+    }
+    return false;
+}
 
 struct Rect
 {
