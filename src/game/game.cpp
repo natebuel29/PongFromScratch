@@ -3,6 +3,7 @@
 #include "input.h"
 #include "logger.h"
 #include "renderer/shared_render_types.h"
+#include "ui/ui.h"
 
 uint32_t constexpr MAX_ENTITIES = 100;
 uint32_t constexpr MAX_MATERIALS = 100;
@@ -173,9 +174,11 @@ bool init_game(GameState *gameState, InputState *input)
     return true;
 }
 
-void update_game(GameState *gameState, InputState *input, float dt)
+void update_game(GameState *gameState, UIState *ui, InputState *input, float dt)
 {
     float speed = 500.0f;
+
+    do_text(ui, {100.0f, 100.0f}, "Pong From Scratch!");
 
     // This is framerate dependent
     for (uint32_t i = 0; i < gameState->entityCount; i++)

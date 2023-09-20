@@ -40,7 +40,7 @@ const char *get_asset(AssetTypeID assetTypeID)
     {
 
         uint32_t size;
-        const char *data = platform_read_file("assets/textures/Font_Atlas_mono_5_10.DDSaddle.DDS", &size);
+        const char *data = platform_read_file("assets/textures/Font_Atlas_mono_5_10.DDS", &size);
         return data;
     }
     break;

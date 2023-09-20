@@ -362,6 +362,37 @@ internal void vk_add_transform(
     vkcontext->transforms[vkcontext->transformCount++] = t;
 }
 
+internal void vk_render_text(VkContext *vkcontext, RenderCommand *rc, uint32_t materialIdx, char *text, Vec2 origin)
+{
+    float originX = origin.x;
+    // Tis assumes theat l.text is NULL terminated!
+    while (char c = *(text++))
+    {
+        if (c < 0)
+        {
+            NB_ASSERT(0, "WRONG CHAR");
+            continue;
+        }
+
+        if (c == ' ')
+        {
+            origin.x += 15.0f;
+            continue;
+        }
+
+        if (c == '\n')
+        {
+            origin.y += 15.0f;
+            origin.x = originX;
+            continue;
+        }
+
+        vk_add_transform(vkcontext, materialIdx, ASSET_SPRITE_FONT_ATLAS, origin, c);
+        rc->instanceCount++;
+        origin.x += 15.0f;
+    }
+}
+
 bool vk_init(VkContext *vkcontext, void *window)
 {
     vk_compile_shader("assets/shaders/shader.vert", "assets/shaders/compiled/shader.vert.spv");
@@ -850,10 +881,10 @@ bool vk_init(VkContext *vkcontext, void *window)
     // Create Descriptor Pool
     {
         VkDescriptorPoolSize poolSizes[] = {
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2}};
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3}};
 
         VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -868,7 +899,7 @@ bool vk_init(VkContext *vkcontext, void *window)
     return true;
 }
 
-bool vk_render(VkContext *vkcontext, GameState *gameState)
+bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
 {
     uint32_t imgIdx;
 
@@ -895,6 +926,30 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
                 }
             }
             vk_add_transform(vkcontext, e->materialIdx, m->assetTypeID, e->origin + e->spriteOffset);
+        }
+    }
+
+    // UI Rendering
+    {
+        if (ui->labelCount)
+        {
+            Descriptor *desc = vk_get_descriptor(vkcontext, ASSET_SPRITE_FONT_ATLAS);
+            if (desc)
+            {
+                RenderCommand *rc = vk_add_render_command(vkcontext, desc);
+                if (rc)
+                {
+                    for (uint32_t labelIdx = 0; labelIdx < ui->labelCount; labelIdx++)
+                    {
+                        Label l = ui->labels[labelIdx];
+                        uint32_t materialIdx = get_material(gameState, ASSET_SPRITE_FONT_ATLAS);
+
+                        float originX = l.pos.x;
+5
+                        vk_render_text(vkcontext, rc, materialIdx, l.text, l.pos);
+                    }
+                }
+            }
         }
     }
 

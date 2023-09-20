@@ -3,8 +3,14 @@
 // This is the game layer
 #include "game/game.cpp"
 
+// this is the ui layer
+
+#include "ui/ui.cpp"
+
+// this is the asset layer
 #include "assets/assets.cpp"
 
+// this is the render layer
 #include "renderer/vk_renderer.cpp"
 
 // This is the input layer
@@ -119,6 +125,8 @@ int main()
 {
     VkContext vkcontext = {};
     GameState gameState = {};
+    UIState ui = {};
+
     input.screenSize = {1000,
                         700};
     if (!platform_create_window(input.screenSize))
@@ -173,9 +181,9 @@ int main()
             // Time in Seconds
             dt /= 1000.0f;
         }
-
-        update_game(&gameState, &input, dt);
-        if (!vk_render(&vkcontext, &gameState))
+        update_ui(&ui);
+        update_game(&gameState, &ui, &input, dt);
+        if (!vk_render(&vkcontext, &gameState, &ui))
         {
             NB_FATAL("FAILED TO RENDER");
             return -1;
