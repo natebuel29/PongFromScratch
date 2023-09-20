@@ -31,8 +31,15 @@ struct Material
     MaterialData materialData;
 };
 
+enum GameStateID
+{
+    GAME_STATE_MAIN_MENU,
+    GAME_STATE_RUNNING_LEVEL
+};
+
 struct GameState
 {
+    GameStateID gameState;
     uint32_t entityCount;
     Entity entities[MAX_ENTITIES];
 
@@ -174,7 +181,7 @@ bool init_game(GameState *gameState, InputState *input)
     return true;
 }
 
-void update_game(GameState *gameState, UIState *ui, InputState *input, float dt)
+internal void update_level(GameState *gameState, InputState *input, UIState *ui, float dt)
 {
     float speed = 500.0f;
 
@@ -189,11 +196,11 @@ void update_game(GameState *gameState, UIState *ui, InputState *input, float dt)
         {
             e->vel.y = 0;
 
-            if (key_is_down(input, W_KEY))
+            if (key_is_down(input, KEY_W))
             {
                 e->vel.y = -speed;
             }
-            if (key_is_down(input, S_KEY))
+            if (key_is_down(input, KEY_S))
             {
                 e->vel.y = speed;
             }
@@ -353,5 +360,18 @@ void update_game(GameState *gameState, UIState *ui, InputState *input, float dt)
                 }
             }
         }
+    }
+}
+
+void update_game(GameState *gameState, InputState *input, UIState *ui, float dt)
+{
+    switch (gameState->gameState)
+    {
+    case GAME_STATE_MAIN_MENU:
+        do_button(ui, input, ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO, 1, {0.0f, 0.0f, input->screenSize});
+        break;
+    case GAME_STATE_RUNNING_LEVEL:
+        update_level(gameState, input, ui, dt);
+        break;
     }
 }

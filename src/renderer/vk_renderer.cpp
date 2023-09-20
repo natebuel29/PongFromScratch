@@ -943,9 +943,6 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
                     {
                         Label l = ui->labels[labelIdx];
                         uint32_t materialIdx = get_material(gameState, ASSET_SPRITE_FONT_ATLAS);
-
-                        float originX = l.pos.x;
-5
                         vk_render_text(vkcontext, rc, materialIdx, l.text, l.pos);
                     }
                 }

@@ -3,10 +3,13 @@
 #include "my_math.h"
 enum KeyID
 {
-    A_KEY,
-    D_KEY,
-    S_KEY,
-    W_KEY,
+    KEY_LEFT_MOUSE,
+    KEY_MIDDLE_MOUSE,
+    KEY_RIGHT_MOUSE,
+    KEY_A,
+    KEY_D,
+    KEY_S,
+    KEY_W,
 
     KEY_COUNT
 };
@@ -19,10 +22,13 @@ struct Key
 
 struct InputState
 {
-    Key keys[KEY_COUNT];
-    Vec2 screenSize;
-};
+    Vec2 mousePos;
+    Vec2 mouseClickPos;
+    Vec2 prevMousePos;
 
+    Vec2 screenSize;
+    Key keys[KEY_COUNT];
+};
 bool key_pressed_this_frame(InputState *input, KeyID key);
 bool key_released_this_frame(InputState *input, KeyID key);
 bool key_is_down(InputState *input, KeyID key);
