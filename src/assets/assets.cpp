@@ -6,6 +6,8 @@
 
 const char *get_asset(AssetTypeID assetTypeID)
 {
+    uint32_t size;
+
     switch (assetTypeID)
     {
     case ASSET_SPRITE_WHITE:
@@ -22,7 +24,6 @@ const char *get_asset(AssetTypeID assetTypeID)
 
     case ASSET_SPRITE_BALL:
     {
-        uint32_t size;
         const char *data = platform_read_file("assets/textures/ball.DDS", &size);
         return data;
     }
@@ -30,7 +31,6 @@ const char *get_asset(AssetTypeID assetTypeID)
 
     case ASSET_SPRITE_PADDLE:
     {
-        uint32_t size;
         const char *data = platform_read_file("assets/textures/paddle.DDS", &size);
         return data;
     }
@@ -38,29 +38,22 @@ const char *get_asset(AssetTypeID assetTypeID)
 
     case ASSET_SPRITE_FONT_ATLAS:
     {
-
-        uint32_t size;
         const char *data = platform_read_file("assets/textures/Font_Atlas_mono_5_10.DDS", &size);
-        return data;
-    }
-    break;
-
-    case ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO:
-    {
-
-        uint32_t size;
-        const char *data = platform_read_file("assets/textures/Pong_from_Scratch_Logo.DDS", &size);
         return data;
     }
     break;
 
     case ASSET_SPRITE_BUTTON_64_16:
     {
-        uint32_t size;
         const char *data = platform_read_file("assets/textures/Button_64_16.DDS", &size);
         return data;
     }
-    break;
+
+    case ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO:
+    {
+        const char *data = platform_read_file("assets/textures/Pong_from_Scratch_Logo.DDS", &size);
+        return data;
+    }
 
     default:
         NB_ASSERT(0, "Unrecognized Asset Type ID: %d", assetTypeID);
@@ -72,6 +65,7 @@ const char *get_asset(AssetTypeID assetTypeID)
 Texture get_texture(AssetTypeID assetTypeID)
 {
     Texture texture = {};
+    // Scaled by 3x
     switch (assetTypeID)
     {
     case ASSET_SPRITE_WHITE:
@@ -97,7 +91,6 @@ Texture get_texture(AssetTypeID assetTypeID)
 
     case ASSET_SPRITE_FONT_ATLAS:
     {
-        // scaled by 3x
         texture.size = {240.0f, 240.0f};
         texture.subSize = {15.0f, 30.0f};
     }
@@ -110,7 +103,7 @@ Texture get_texture(AssetTypeID assetTypeID)
 
     case ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO:
         texture.size = {900.0f, 600.0f};
-        texture.subSize = {192.0f, 48.0f};
+        texture.subSize = texture.size;
         break;
 
     default:

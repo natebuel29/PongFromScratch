@@ -7,6 +7,7 @@
 - ctrl + shift + e -> highlight and traverse project explorer
 - ctrl - home -> top of page
 - ctrl - end -> bottom of page
+- ctrl - shift - k -> delete line
 - ctrl + n -> create new file
 - ctrl + p -> quick open a file
 - ctrl + k ctrl + i-> Show Hover (show error message)

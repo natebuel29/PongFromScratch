@@ -1,5 +1,4 @@
 #include "ui.h"
-#include "input.h"
 
 internal void set_hot(UIState *ui, UIID uiID)
 {
@@ -14,7 +13,7 @@ internal void set_active(UIState *ui, UIID uiID)
     ui->active = uiID;
 }
 
-internal void set_inactive(UIState *ui, UIID uiID)
+internal void set_inactive(UIState *ui)
 {
     ui->active = {};
 }
@@ -35,10 +34,12 @@ internal float get_text_width(char *text)
                     highestTextWidth = result;
                 }
                 continue;
+                ;
             }
 
             result += 15.0f;
         }
+
         if (result < highestTextWidth)
         {
             result = highestTextWidth;
@@ -48,13 +49,15 @@ internal float get_text_width(char *text)
     return result;
 }
 
-internal UIElement *create_ui_element(UIState *ui, AssetTypeID assetTypeID, uint32_t ID, Rect rect, char *text)
+internal UIElement *create_ui_element(UIState *ui, AssetTypeID assetTypeID,
+                                      uint32_t ID, Rect rect, char *text)
 {
     UIElement *e = 0;
+
     if (ui->uiElementCount < MAX_UI_ELEMENTS)
     {
         e = &ui->uiElements[ui->uiElementCount++];
-        *e = {}; // initialize to zero
+        *e = {}; // Initialize to zero
 
         e->assetTypeID = assetTypeID;
         e->rect = rect;
@@ -63,7 +66,7 @@ internal UIElement *create_ui_element(UIState *ui, AssetTypeID assetTypeID, uint
     }
     else
     {
-        NB_ASSERT(0, "reached maximum amount of UI elements");
+        NB_ASSERT(0, "Reached Maximum amount of UI Elements");
     }
 
     return e;
@@ -83,6 +86,7 @@ void update_ui(UIState *ui)
 {
     ui->labelCount = 0;
     ui->uiElementCount = 0;
+    ui->hotLastFrame = ui->hotThisFrame;
 }
 
 void do_text(UIState *ui, Vec2 pos, char *text)
@@ -90,19 +94,37 @@ void do_text(UIState *ui, Vec2 pos, char *text)
     if (ui->labelCount < MAX_LABELS)
     {
         Label *l = &ui->labels[ui->labelCount++];
+        *l = {};
 
         l->text = text;
         l->pos = pos;
     }
     else
     {
-        NB_ASSERT(0, "REACHED MAX AMOUNT OF LABELS");
+        NB_ASSERT(0, "Reached maximum amount of Labels!");
+    }
+}
+
+void do_number(UIState *ui, Vec2 pos, int number)
+{
+    if (ui->labelCount < MAX_LABELS)
+    {
+        Label *l = &ui->labels[ui->labelCount++];
+        *l = {};
+
+        l->number = number;
+        l->pos = pos;
+    }
+    else
+    {
+        NB_ASSERT(0, "Reached maximum amount of Labels!");
     }
 }
 
 bool do_button(UIState *ui, InputState *input, AssetTypeID assetTypeID, uint32_t ID, Rect rect, char *text)
 {
-    bool result = true;
+    bool result = false;
+
     UIElement *e = create_ui_element(ui, assetTypeID, ID, rect, text);
 
     if (e)
@@ -117,6 +139,8 @@ bool do_button(UIState *ui, InputState *input, AssetTypeID assetTypeID, uint32_t
                 {
                     result = true;
                 }
+
+                set_inactive(ui);
             }
 
             e->animationIdx = 2;
@@ -140,7 +164,9 @@ bool do_button(UIState *ui, InputState *input, AssetTypeID assetTypeID, uint32_t
         if (text)
         {
             float textWidth = get_text_width(text);
+            // Center
             textPos.x += (rect.size.x - textWidth) / 2.0f;
+
             do_text(ui, textPos, text);
         }
     }

@@ -1,50 +1,49 @@
+
 #include "assets/assets.h"
 #include "defines.h"
-#include "input.h"
 #include "logger.h"
-#include "renderer/shared_render_types.h"
+#include "input.h"
+#include "my_math.h"
 #include "ui/ui.h"
 
 uint32_t constexpr MAX_ENTITIES = 100;
-uint32_t constexpr MAX_MATERIALS = 100;
+float constexpr SPEED_UP = 15.0f;
+float constexpr INITIAL_X_VEL = 400.0f;
+float constexpr INITIAL_Y_VEL_PADDLE = 500.0f;
 
 enum Components
 {
     COMPONENT_BALL = BIT(1),
     COMPONENT_LEFT_PADDLE = BIT(2),
-    COMPONENT_RIGHT_PADDLE = BIT(3)
+    COMPONENT_RIGHT_PADDLE = BIT(3),
 };
 
 struct Entity
 {
     uint32_t compMask;
-    Vec2 vel;
+    AssetTypeID assetTypeID;
+    Vec4 color;
     Vec2 origin;
-    uint32_t materialIdx;
+    Vec2 vel;
     Vec2 spriteOffset;
     Rect boundingBox;
-};
-
-struct Material
-{
-    AssetTypeID assetTypeID;
-    MaterialData materialData;
 };
 
 enum GameStateID
 {
     GAME_STATE_MAIN_MENU,
+    GAME_STATE_SCORE_SCREEN,
     GAME_STATE_RUNNING_LEVEL
 };
 
 struct GameState
 {
     GameStateID gameState;
+    float gameTime;
+    int score;
+    float paddleSpeed;
     uint32_t entityCount;
     Entity entities[MAX_ENTITIES];
-
-    uint32_t materialCount;
-    Material materials[MAX_MATERIALS];
 };
 
 internal bool has_component(Entity *e, Components c)
@@ -59,151 +58,126 @@ internal void add_component(Entity *e, Components c)
 
 internal void remove_component(Entity *e, Components c)
 {
-    /*
-     * And with NOT c, this turns all bits to 1 except for the one BIT that c references.
+    /**
+     * AND with NOT c, this turns all bits to 1,
+     * except for the one BIT that c references.
      */
     e->compMask &= ~c;
 }
 
-internal Entity *create_entity(GameState *gameState,
-                               Vec2 origin,
-                               Vec2 spriteOffset,
-                               Rect boundingBox)
+internal Entity *create_entity(
+    GameState *gameState,
+    Vec2 origin,
+    Vec2 spriteOffset,
+    Rect boundingBox,
+    AssetTypeID assetTypeID = ASSET_SPRITE_WHITE,
+    Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
 {
     Entity *e = 0;
+
     if (gameState->entityCount < MAX_ENTITIES)
     {
         e = &gameState->entities[gameState->entityCount++];
         e->origin = origin;
         e->spriteOffset = spriteOffset;
         e->boundingBox = boundingBox;
+        e->assetTypeID = assetTypeID;
+        e->color = color;
     }
     else
     {
-        NB_ASSERT(0, "Reached Maximum amount of entitites!");
+        NB_ASSERT(0, "Reached Maximum amount of Entities!");
     }
 
     return e;
 }
 
-internal uint32_t create_material(GameState *gameState, AssetTypeID assetTypeID, Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
-{
-    uint32_t materialIdx = INVALID_IDX;
-    if (gameState->materialCount < MAX_MATERIALS)
-    {
-        materialIdx = gameState->materialCount;
-        Material *m = &gameState->materials[gameState->materialCount++];
-        m->assetTypeID = assetTypeID;
-        m->materialData.color = color;
-    }
-    else
-    {
-        NB_ASSERT(0, "REached maximum amount of materials");
-    }
-
-    return materialIdx;
-}
-
-internal uint32_t get_material(GameState *gameState, AssetTypeID assetTypeID, Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
-{
-    uint32_t materialIdx = INVALID_IDX;
-
-    for (uint32_t i = 0; i < gameState->materialCount; i++)
-    {
-        Material *m = &gameState->materials[i];
-
-        if (m->assetTypeID == assetTypeID && m->materialData.color == color)
-        {
-            materialIdx = i;
-            break;
-        }
-    }
-
-    if (materialIdx == INVALID_IDX)
-    {
-        materialIdx = create_material(gameState, assetTypeID, color);
-    }
-
-    return materialIdx;
-}
-
-internal Material *get_material(GameState *gameState, uint32_t materialIdx)
-{
-    Material *m = 0;
-    if (materialIdx < MAX_MATERIALS)
-    {
-        m = &gameState->materials[materialIdx];
-    }
-
-    return m;
-}
-
-// ##############################################################################################
-//                                   Functions Related to the game
-// ##############################################################################################
-
+// ########################################################################################
+//                       Functions related to the Game
+// ########################################################################################
 internal Rect get_bounding_box(Entity *e)
 {
-    NB_ASSERT(e, "no entity suplied");
+    NB_ASSERT(e, "No Entity supplied");
     return Rect{e->origin + e->boundingBox.offset, e->boundingBox.size};
 }
 
 bool init_game(GameState *gameState, InputState *input)
 {
     Vec2 paddleSize = get_texture(ASSET_SPRITE_PADDLE).subSize;
-    Vec2 ballSize = get_texture(ASSET_SPRITE_BALL).subSize;
     Vec2 spriteOffsetPaddle = paddleSize / 2.0f * -1.0f;
+    Vec2 ballSize = get_texture(ASSET_SPRITE_BALL).subSize;
     Vec2 spriteOffsetBall = ballSize / 2.0f * -1.0f;
 
     // Left Paddle
-    Entity *e = create_entity(gameState, {10.0f + paddleSize.x / 2.0f, input->screenSize.y / 2.0f}, spriteOffsetPaddle, {spriteOffsetPaddle, paddleSize});
+    Entity *e = create_entity(gameState,
+                              {10.0f + paddleSize.x / 2.0f, input->screenSize.y / 2.0f},
+                              spriteOffsetPaddle,
+                              {spriteOffsetPaddle, paddleSize},
+                              ASSET_SPRITE_PADDLE);
     add_component(e, COMPONENT_LEFT_PADDLE);
-    e->materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
 
     // Right Paddle
     e = create_entity(gameState,
                       {input->screenSize.x - 10.0f - paddleSize.x / 2.0f, input->screenSize.y / 2.0f},
                       spriteOffsetPaddle,
-                      {spriteOffsetPaddle, paddleSize});
+                      {spriteOffsetPaddle, paddleSize},
+                      ASSET_SPRITE_PADDLE);
     add_component(e, COMPONENT_RIGHT_PADDLE);
 
-    e->materialIdx = create_material(gameState, ASSET_SPRITE_PADDLE);
-
     // Ball
-    e = create_entity(gameState,
-                      {input->screenSize.x / 2.0f, input->screenSize.y / 2.0f},
+    e = create_entity(gameState, input->screenSize / 2.0f,
                       spriteOffsetBall,
-                      {spriteOffsetBall, ballSize});
+                      {spriteOffsetBall, ballSize},
+                      ASSET_SPRITE_BALL);
     add_component(e, COMPONENT_BALL);
-
-    e->materialIdx = create_material(gameState, ASSET_SPRITE_BALL);
-    e->vel = {500.0f, 250.0f};
+    e->vel = {INITIAL_X_VEL, INITIAL_X_VEL / 2};
+    gameState->paddleSpeed = INITIAL_Y_VEL_PADDLE;
     return true;
 }
 
 internal void update_level(GameState *gameState, InputState *input, UIState *ui, float dt)
 {
-    float speed = 500.0f;
+    float speed = gameState->paddleSpeed;
+    gameState->paddleSpeed += SPEED_UP * dt;
+    gameState->gameTime += dt;
 
-    do_text(ui, {100.0f, 100.0f}, "Pong From Scratch!");
+    // Input
+    {
+        if (key_pressed_this_frame(input, KEY_ESC))
+        {
+            gameState->gameState = GAME_STATE_MAIN_MENU;
+        }
+    }
 
-    // This is framerate dependent
+    // Time
+    {
+        do_text(ui, {10.0f, 10.0f}, "Time: ");
+        do_number(ui, {90.0, 10.0f}, (int)gameState->gameTime);
+    }
+
+    // Score
+    {
+        do_text(ui, {200.0f, 10.0f}, "Score: ");
+        do_number(ui, {295.0, 10.0f}, gameState->score);
+    }
+
     for (uint32_t i = 0; i < gameState->entityCount; i++)
     {
         Entity *e = &gameState->entities[i];
 
         if (has_component(e, COMPONENT_LEFT_PADDLE))
         {
-            e->vel.y = 0;
-
+            e->vel = {};
             if (key_is_down(input, KEY_W))
             {
                 e->vel.y = -speed;
             }
+
             if (key_is_down(input, KEY_S))
             {
                 e->vel.y = speed;
             }
+
             // Confine the Paddle to the screen
             {
                 e->origin.y = clamp(e->origin.y,
@@ -223,12 +197,12 @@ internal void update_level(GameState *gameState, InputState *input, UIState *ui,
             // We are below the Ball, need to move UP
             if (e->origin.y > ball->origin.y)
             {
-                e->vel.y = -speed;
+                e->vel.y = -speed * 0.9f;
 
                 float yHeading = e->origin.y + e->vel.y * dt;
                 float distanceYToBall = ball->origin.y - e->origin.y;
 
-                if (yHeading < distanceYToBall)
+                if (yHeading > ball->origin.y)
                 {
                     e->origin.y = ball->origin.y;
                 }
@@ -241,7 +215,7 @@ internal void update_level(GameState *gameState, InputState *input, UIState *ui,
             // We are above the Ball, need to move DOWN
             if (e->origin.y < ball->origin.y)
             {
-                e->vel.y = speed;
+                e->vel.y = speed * 0.9f;
 
                 float yHeading = e->origin.y + e->vel.y * dt;
                 float distanceYToBall = ball->origin.y - e->origin.y;
@@ -256,20 +230,27 @@ internal void update_level(GameState *gameState, InputState *input, UIState *ui,
                 }
             }
         }
+
         if (has_component(e, COMPONENT_BALL))
         {
+            // Right side
             if (e->origin.x + e->boundingBox.offset.x + e->boundingBox.size.x > input->screenSize.x)
             {
                 e->vel.x = -e->vel.x;
 
                 e->origin.x -= 2 * (e->origin.x + e->boundingBox.offset.x + e->boundingBox.size.x - input->screenSize.x);
+
+                gameState->score += (int)speed;
             }
 
+            // LEeft side
             if (e->origin.x + e->boundingBox.offset.x < 0.0f)
             {
                 e->vel.x = -e->vel.x;
 
                 e->origin.x -= 2 * (e->origin.x + e->boundingBox.offset.x);
+
+                gameState->gameState = GAME_STATE_SCORE_SCREEN;
             }
 
             if (e->origin.y + e->boundingBox.offset.y + e->boundingBox.size.y > input->screenSize.y)
@@ -338,25 +319,24 @@ internal void update_level(GameState *gameState, InputState *input, UIState *ui,
                 e->origin = nextBallPos;
             }
 
-            // Increase the speed of the ball
+            // Increase the Speed of the Ball
             {
-                float speedUp = 25.0f;
-
                 if (e->vel.x < 0.0f)
                 {
-                    e->vel.x -= dt * speedUp;
+                    e->vel.x -= dt * SPEED_UP;
                 }
                 else
                 {
-                    e->vel.x += dt * speedUp;
+                    e->vel.x += dt * SPEED_UP;
                 }
+
                 if (e->vel.y < 0.0f)
                 {
-                    e->vel.y -= dt * speedUp;
+                    e->vel.y -= dt * SPEED_UP;
                 }
                 else
                 {
-                    e->vel.y += dt * speedUp;
+                    e->vel.y += dt * SPEED_UP;
                 }
             }
         }
@@ -368,10 +348,66 @@ void update_game(GameState *gameState, InputState *input, UIState *ui, float dt)
     switch (gameState->gameState)
     {
     case GAME_STATE_MAIN_MENU:
-        do_button(ui, input, ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO, 1, {0.0f, 0.0f, input->screenSize});
+    {
+        do_button(ui, input, ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO, line_id(1),
+                  {0.0f, 0.0f, input->screenSize});
+
+        ui->globalLayer++;
+        if (do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, line_id(1),
+                      {400.0f, 400.0f, 196.0f, 48.0f}, "Play"))
+        {
+
+            gameState->gameState = GAME_STATE_RUNNING_LEVEL;
+        }
+
+        if (do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, line_id(1),
+                      {400.0f, 470.0f, 196.0f, 48.0f}, "Quit"))
+        {
+            platform_exit_application();
+        }
+        ui->globalLayer--;
+
         break;
+    }
+
     case GAME_STATE_RUNNING_LEVEL:
         update_level(gameState, input, ui, dt);
         break;
+
+    case GAME_STATE_SCORE_SCREEN:
+    {
+        do_button(ui, input, ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO, line_id(1),
+                  {0.0f, 0.0f, input->screenSize});
+        // Score
+        {
+            do_text(ui, {450.0f, 350.0f}, "Score: ");
+            do_number(ui, {545.0, 350.0f}, gameState->score);
+        }
+
+        ui->globalLayer++;
+        if (do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, line_id(1),
+                      {400.0f, 400.0f, 196.0f, 48.0f}, "Restart"))
+        {
+            gameState->gameTime = 0;
+            gameState->score = 0;
+            gameState->entityCount = 0;
+
+            init_game(gameState, input);
+
+            gameState->gameState = GAME_STATE_RUNNING_LEVEL;
+        }
+        if (do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, line_id(1),
+                      {400.0f, 470.0f, 196.0f, 48.0f}, "Main Menu"))
+        {
+            gameState->gameTime = 0;
+            gameState->score = 0;
+            gameState->entityCount = 0;
+
+            init_game(gameState, input);
+            gameState->gameState = GAME_STATE_MAIN_MENU;
+        }
+        ui->globalLayer--;
+    }
+    break;
     }
 }

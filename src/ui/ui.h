@@ -2,7 +2,6 @@
 
 #include "assets/assets.h"
 #include "my_math.h"
-#include "defines.h"
 
 uint32_t constexpr MAX_LABELS = 100;
 uint32_t constexpr MAX_UI_ELEMENTS = 100;
@@ -16,8 +15,8 @@ struct UIID
 struct UIElement
 {
     UIID ID;
-    Rect rect;
     AssetTypeID assetTypeID;
+    Rect rect;
     char *text;
     uint32_t animationIdx;
 };
@@ -25,6 +24,7 @@ struct UIElement
 struct Label
 {
     char *text;
+    int number = INVALID_NUMBER;
     Vec2 pos;
 };
 
@@ -40,12 +40,13 @@ struct UIState
     Label labels[MAX_LABELS];
 
     uint32_t uiElementCount;
-    UIElement uiElements[MAX_UI_ELEMENTS];
+    UIElement uiElements[MAX_LABELS];
 };
 
-bool do_button(UIState *ui, InputState *input, AssetTypeID assetTypeID, uint32_t ID, Rect rect, char *text = 0);
-bool is_active(UIState *ui, uint32_t ID);
 bool is_hot(UIState *ui, uint32_t ID);
+bool is_active(UIState *ui, uint32_t ID);
 void update_ui(UIState *ui);
 
 void do_text(UIState *ui, Vec2 pos, char *text);
+bool do_button(UIState *ui, InputState *input, AssetTypeID assetTypeID, uint32_t ID, Rect rect, char *text = 0);
+void do_number(UIState *ui, Vec2 pos, int number);
